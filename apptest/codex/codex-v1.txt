@@ -46,3 +46,6 @@
 - Güncelleme hattındaki AES/ZIP adımları kaldırıldı; `version.json` düz okunuyor ve `app.asar` şifresiz indiriliyor.
 - `main.js` boyut + hash doğrulamasını ve `asar.listPackage` kontrolünü koruyarak `app_new.asar` yazıyor, bozuk paketleri hemen temizliyor.
 - Build hattı şifresiz `dist-update/app.asar` ve düz `version.json` üretip yükleme için listeliyor; Cloudflare Worker uçları da `/app.asar` ve düz metadata servis ediyor.
+
+[2024-11-24] version.json uyumluluk çözümü
+- `main.js` artık `version.json` içeriğini normalize ediyor; düz alanlar yoksa base64 gömülü payload çözülerek `version/sha256/asarUrl` alanları çıkarılıyor ve göreli `asarUrl` adresleri otomatik tamamlanıyor.

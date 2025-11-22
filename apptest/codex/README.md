@@ -13,7 +13,7 @@ KissApp, Windows hedefli bir Electron başlatıcısıdır. Ana odak noktası uyg
 ## Ana Proses (main.js)
 - **Yönetici Kontrolü:** Windows’ta oturum gruplarını sorgulayarak yerel admin SID’ini arar; yetki yoksa `runas` kabuğu ile kendini yeniden başlatır.
 - **Güncelleme Sistemi:**
-  - Uzak `version.json` dosyası artık şifresiz okunuyor; TLS host kontrolü yalnızca `updater.bekapvc.com` için geçerli.
+  - Uzak `version.json` dosyası şifresiz okunur; gerekirse eski base64-gömülü format da çözümlenerek sürüm, hash ve `asarUrl` alanları normalleştirilir. `asarUrl` göreli gelirse aynı domain ile tamamlanır.
   - `app.asar` doğrudan indirilip `app_new.asar` olarak kaydediliyor; Content-Length ve beklenen boyutla karşılaştırma, `asar.listPackage` ile offline doğrulama ve SHA256 hash kontrolü ardışık çalışıyor.
   - Hash eşleşirse `update_pending.json` oluşturulur; bir sonraki açılışta `applyStartupPatch` eski ASAR’ı yedekleyip yenisiyle değiştirir. ASAR doğrulaması için kullanılan `asar` modülü prod bağımlılığı olarak paketlendi.
   - ASAR diske yazılamaz, doğrulamadan geçemez veya hash uyuşmazsa dosya ve pending flag hemen silinir; böylece bozuk paketlerle döngüye girilmez.

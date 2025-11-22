@@ -209,6 +209,67 @@ function doRequest(url, options = {}, body, timeoutMs = 8000) {
 // =====================================================
 // 1) version.json → metadata alınır
 // =====================================================
+function normalizeRemoteVersion(jsonBuffer) {
+    const text = jsonBuffer?.toString("utf8") || "";
+
+    let parsed;
+    try {
+        parsed = JSON.parse(text);
+    } catch (err) {
+        throw new Error("version.json okunamadı: " + err.message);
+    }
+
+    const unwrap = (obj) => {
+        if (!obj || typeof obj !== "object") {
+            throw new Error("version.json beklenen alanları içermiyor");
+        }
+
+        // Düz (şifresiz) format
+        if (obj.version && obj.sha256 && obj.asarUrl) {
+            return {
+                version: String(obj.version),
+                sha256: String(obj.sha256).toUpperCase(),
+                size: Number(obj.size) || 0,
+                asarUrl: String(obj.asarUrl),
+            };
+        }
+
+        // Legacy: gömülü base64/hex payload → çöz ve tekrar dene
+        if (obj.payload) {
+            const payloadEnc = obj.payload_encoding || obj.encoding || "base64";
+            const raw = obj.payload;
+
+            if (typeof raw !== "string" || !raw.length) {
+                throw new Error("version.json payload boş veya geçersiz");
+            }
+
+            let decodedText;
+            try {
+                decodedText = Buffer.from(raw, payloadEnc).toString("utf8");
+            } catch (err) {
+                throw new Error(
+                    "version.json payload çözülemedi: " + err.message
+                );
+            }
+
+            let nested;
+            try {
+                nested = JSON.parse(decodedText);
+            } catch (err) {
+                throw new Error(
+                    "version.json payload JSON formatında değil: " + err.message
+                );
+            }
+
+            return unwrap(nested);
+        }
+
+        throw new Error("version.json formatı desteklenmiyor veya eksik");
+    };
+
+    return unwrap(parsed);
+}
+
 async function fetchRemoteVersion() {
     const { statusCode, body } = await doRequest(
         VERSION_URL,
@@ -219,14 +280,7 @@ async function fetchRemoteVersion() {
 
     if (statusCode !== 200) throw new Error("HTTP " + statusCode);
 
-    const data = JSON.parse(body.toString("utf8"));
-
-    return {
-        version: data.version,
-        sha256: data.sha256.toUpperCase(),
-        size: data.size,
-        asarUrl: data.asarUrl,
-    };
+    return normalizeRemoteVersion(body);
 }
 
 // =====================================================
@@ -237,6 +291,19 @@ async function performUpdate(remote, sendStatus) {
     const NEW = path.join(dir, "app_new.asar"); // renderer loglarına uyan net isim
     const LEGACY_NEW = path.join(dir, "app_new.bin");
     const PENDING = path.join(dir, "update_pending.json");
+
+    if (!remote.asarUrl) {
+        throw new Error("Güncelleme paketi adresi (asarUrl) eksik");
+    }
+
+    // Relatif URL geldiyse version.json adresine göre tamamla
+    let asarUrl = remote.asarUrl;
+    try {
+        const tmp = new URL(remote.asarUrl, VERSION_URL);
+        asarUrl = tmp.toString();
+    } catch {
+        // URL hatalı → aşağıda indirme denemesi patlayacak ve hata mesajı dönecek
+    }
 
     console.log("[UPDATE] Remote meta:", remote);
 
@@ -249,7 +316,7 @@ async function performUpdate(remote, sendStatus) {
 
     // 1) ASAR indir
     const downloadInfo = await downloadFile(
-        remote.asarUrl,
+        asarUrl,
         NEW,
         (recv, total, percent) => {
             sendStatus(CHANNELS.UPDATE_PROGRESS, { percent });
