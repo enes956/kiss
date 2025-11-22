@@ -80,6 +80,12 @@ function assertValidAsar(filePath) {
     try {
         // asar.listPackage okuma yaparak header'ı doğrular; başarısız olursa istisna fırlatır
         asar.listPackage(filePath);
+        console.log(
+            "[ASAR] Doğrulama OK:",
+            path.basename(filePath),
+            "size=",
+            stat.size
+        );
     } catch (err) {
         throw new Error(
             `ASAR doğrulaması başarısız (${path.basename(filePath)}): ${err.message}`
@@ -259,6 +265,8 @@ async function performUpdate(remote, sendStatus) {
     const LEGACY_NEW = path.join(dir, "app_new.bin");
     const PENDING = path.join(dir, "update_pending.json");
 
+    console.log("[UPDATE] Remote meta:", remote);
+
     // Temizle
     safeUnlink(ENC);
     safeUnlink(ZIP);
@@ -269,17 +277,24 @@ async function performUpdate(remote, sendStatus) {
     sendStatus(CHANNELS.UPDATE_DOWNLOAD_STATUS, { state: "started" });
 
     // 1) ENC indir
-    await downloadFile(remote.asarUrl, ENC, (recv, total, percent) => {
-        sendStatus(CHANNELS.UPDATE_PROGRESS, { percent });
-    });
+    const downloadInfo = await downloadFile(
+        remote.asarUrl,
+        ENC,
+        (recv, total, percent) => {
+            sendStatus(CHANNELS.UPDATE_PROGRESS, { percent });
+        }
+    );
+    console.log("[UPDATE] ENC indirildi:", downloadInfo);
 
     // 2) ENC → ZIP (AES-GCM)
     const buf = fs.readFileSync(ENC);
+    console.log("[UPDATE] ENC dosya boyutu:", buf.length);
     const iv = buf.slice(0, 12);
     const tag = buf.slice(12, 28);
     const cipher = buf.slice(28);
 
     const zipBuf = decryptAesGcm(remote.asarKey, iv, tag, cipher);
+    console.log("[UPDATE] ZIP buffer boyutu:", zipBuf.length);
     fs.writeFileSync(ZIP, zipBuf);
 
     // 3) ZIP → ASAR çıkar
@@ -290,6 +305,11 @@ async function performUpdate(remote, sendStatus) {
         throw new Error("Zip içinde dosya yok!");
 
     // Önce .asar, yoksa ilk dosya
+    console.log(
+        "[UPDATE] ZIP entries:",
+        entries.map((e) => `${e.entryName}:${e.header?.size || 0}`)
+    );
+
     let entry = entries.find(
         (e) => !e.isDirectory && e.entryName.endsWith(".asar")
     );
@@ -301,6 +321,20 @@ async function performUpdate(remote, sendStatus) {
 
     // `getData` buffer'ını kopyalayarak header bütünlüğünü koru
     const finalBuf = Buffer.from(entry.getData());
+    console.log(
+        "[UPDATE] ASAR buffer alındı:",
+        entry.entryName,
+        "zip-size=",
+        entry.header.size,
+        "buf-size=",
+        finalBuf.length
+    );
+
+    if (remote.size && remote.size !== finalBuf.length) {
+        throw new Error(
+            `ASAR boyutu beklenenle uyuşmuyor. Meta=${remote.size} gelen=${finalBuf.length}`
+        );
+    }
 
     // 4) app_new.asar yaz + doğrula
     fs.writeFileSync(NEW, finalBuf, { flag: "w" });
@@ -310,8 +344,11 @@ async function performUpdate(remote, sendStatus) {
     // 5) Hash doğrula
     const hash = (await sha256File(NEW)).toUpperCase();
     if (hash !== remote.sha256) {
-        throw new Error("Hash mismatch");
+        throw new Error(
+            `Hash mismatch – beklenen ${remote.sha256}, gelen ${hash}`
+        );
     }
+    console.log("[UPDATE] Hash doğrulandı:", hash);
 
     // 6) Startup patch için işaret bırak
     const pendingPayload = {
@@ -386,6 +423,7 @@ function setupUpdateIpc() {
             await performUpdate(pendingUpdate, sendToRenderer);
         } catch (err) {
             console.error("[UPDATE] İndirme/uygulama hatası:", err);
+            console.error("[UPDATE] Stack:", err?.stack || "<no-stack>");
             sendToRenderer(CHANNELS.UPDATE_DOWNLOAD_STATUS, {
                 state: "error",
                 message:
@@ -457,6 +495,13 @@ async function applyStartupPatch() {
         }
 
         // Yeni ASAR dosyasını swap'ten önce doğrula
+        const pendingStat = fs.statSync(newAsarPath);
+        console.log(
+            "[PATCH] Yeni asar bulundu:",
+            newAsarPath,
+            "size=",
+            pendingStat.size
+        );
         assertValidAsar(newAsarPath);
 
         // Eski backup'ı temizle
@@ -490,6 +535,14 @@ async function applyStartupPatch() {
         }
     } catch (err) {
         console.error("[PATCH] Patch uygulanırken hata:", err);
+        try {
+            if (fs.existsSync(newAsarPath)) {
+                console.log("[PATCH] Hatalı asar temizleniyor:", newAsarPath);
+                safeUnlink(newAsarPath);
+            }
+        } catch {
+            // ignore
+        }
         // İstersen burada pending'i silmeyip sonraki açılışta tekrar deneyebilirsin.
     }
 }
@@ -575,7 +628,13 @@ function downloadFile(url, dest, onProgress, redirectCount = 0) {
                 res.pipe(file);
 
                 file.on("finish", () => {
-                    file.close(resolve);
+                    file.close(() =>
+                        resolve({
+                            received,
+                            total,
+                            path: dest,
+                        })
+                    );
                 });
 
                 res.on("error", (err) => {

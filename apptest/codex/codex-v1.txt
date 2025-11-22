@@ -28,3 +28,7 @@
 
 ## Asar Doğrulaması İçin Bağımlılık Güncellemesi
 - `asar` modülü prod bağımlılığına taşındı; böylece paketli kurulumda `Cannot find module 'asar'` hatası olmadan offline doğrulama çalışmaya devam eder.
+
+## Güncelleme Adımlarında Ayrıntılı Loglama
+- `performUpdate` artık indirilen baytları, Content-Length değerini, AES sonrası ZIP boyutunu, ZIP entry listesini, çıkarılan ASAR boyutunu ve hash eşleşmesini konsola yazıyor; meta boyut ile uyuşmazlık veya hash hatasında ayrıntılı mesaj üretiyor.
+- `applyStartupPatch` pending ASAR'ın boyutunu logluyor, doğrulama hatası alırsa bozuk dosyayı otomatik siliyor ve stack bilgisini yazıyor. Böylece `Invalid package ...\app_new.asar` hatalarının hangi aşamada üretildiği net şekilde takip edilebiliyor.
