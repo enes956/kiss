@@ -18,3 +18,6 @@
 ## Patch Uygulama Sertleştirmeleri
 - İndirilen asar dosyasının adı `app_new.asar` olarak netleştirildi; hash değeri `update_pending.json` içinde saklanıp açılışta doğrulanıyor.
 - Önceki çıktılarla uyum için `app_new.bin` okunmaya devam ediliyor, ancak hash uyuşmazlığında hem dosya hem pending işareti temizlenerek yeniden indirme isteniyor.
+
+## Patch Uygulama Yenilemesi
+- `applyStartupPatch`, `app.asar` değiştirildikten sonra ana süreci yeniden başlatır; böylece yeni paket aynı açılışta yüklenir ve güncelleme ekranı tekrar tekrar sürüm istemez.

@@ -464,6 +464,15 @@ async function applyStartupPatch() {
         // Pending işaretini temizle
         safeUnlink(PENDING);
         console.log("[PATCH] Pending flag temizlendi.");
+
+        // Yeni ASAR etkin olsun diye süreci yenile
+        try {
+            console.log("[PATCH] Yeni asar aktif ediliyor, uygulama yeniden başlatılıyor...");
+            app.relaunch();
+            setTimeout(() => app.exit(0), 300);
+        } catch (err) {
+            console.error("[PATCH] Yeniden başlatma başarısız:", err);
+        }
     } catch (err) {
         console.error("[PATCH] Patch uygulanırken hata:", err);
         // İstersen burada pending'i silmeyip sonraki açılışta tekrar deneyebilirsin.
