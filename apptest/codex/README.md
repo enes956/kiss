@@ -15,6 +15,7 @@ KissApp, Windows hedefli bir Electron başlatıcısıdır. Ana odak noktası uyg
 - **Güncelleme Sistemi:**
   - Uzak `version.json` dosyasını AES-GCM ile çözer, dinamik `asarKey` alır ve yalnızca izin verilen hosta (`updater.bekapvc.com`) TLS doğrulamasıyla bağlanır.
   - `app.asar.enc` dosyasını indirir, doğrulanmış ZIP’ten yeni ASAR’ı çıkarır ve `app_new.asar` olarak kullanıcı verisi dizinine yazar.
+  - İndirme tamamlanmadan `Content-Length` ile karşılaştırma yapar; eksik veya boş dosya anında silinir ve hata verilir. AES çözümü ve ZIP açma adımları ayrı ayrı guard edilerek bozuk veya yanlış şifreli paketler yakalanır.
   - Hash eşleşirse `update_pending.json` oluşturur; bir sonraki açılışta `applyStartupPatch` eski ASAR’ı yedekleyip yenisiyle değiştirir. ASAR doğrulaması için kullanılan `asar` modülü artık prod bağımlılığına taşındığı için paketli kurulumda eksik modül hatası oluşmaz.
   - Eksik kalan IPC köprüsü tamamlandı: UPDATE_* kanalları artık renderer’dan gelen `update:check` / `update:start` / `update:done` isteklerini dinler, durum/ilerleme ve hata mesajlarını renderer’a geri yollar. Güncel sürümde otomatik login geçişi için `update:done` ana süreç tarafından yeniden yayınlanır.
   - Güncelleme sürecinin her adımı artık loglanıyor: indirilen baytlar ve Content-Length, AES çözümünden çıkan ZIP boyutu, ZIP entry listesi, çıkarılan ASAR boyutu, hash doğrulaması ve pending flag yazımı konsola düşüyor. Patch aşaması da bulunan ASAR boyutunu ve doğrulama sonucunu raporluyor; bozuk dosya tespit edilirse otomatik olarak siliniyor.

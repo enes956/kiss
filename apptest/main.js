@@ -293,13 +293,29 @@ async function performUpdate(remote, sendStatus) {
     const tag = buf.slice(12, 28);
     const cipher = buf.slice(28);
 
-    const zipBuf = decryptAesGcm(remote.asarKey, iv, tag, cipher);
+    let zipBuf;
+    try {
+        zipBuf = decryptAesGcm(remote.asarKey, iv, tag, cipher);
+    } catch (err) {
+        throw new Error("AES çözümü başarısız: " + err.message);
+    }
+
+    if (!zipBuf || !zipBuf.length) {
+        throw new Error("AES çözümünden boş ZIP döndü");
+    }
+
     console.log("[UPDATE] ZIP buffer boyutu:", zipBuf.length);
     fs.writeFileSync(ZIP, zipBuf);
 
     // 3) ZIP → ASAR çıkar
-    const zip = new AdmZip(zipBuf);
-    const entries = zip.getEntries();
+    let zip;
+    let entries;
+    try {
+        zip = new AdmZip(zipBuf);
+        entries = zip.getEntries();
+    } catch (err) {
+        throw new Error("Zip açılırken hata: " + err.message);
+    }
 
     if (!entries || entries.length === 0)
         throw new Error("Zip içinde dosya yok!");
@@ -642,13 +658,45 @@ function downloadFile(url, dest, onProgress, redirectCount = 0) {
                 res.pipe(file);
 
                 file.on("finish", () => {
-                    file.close(() =>
+                    file.close(() => {
+                        const receivedOk = total
+                            ? received === total
+                            : received > 0;
+
+                        if (!receivedOk) {
+                            console.error(
+                                "[DL] Eksik dosya:",
+                                dest,
+                                "received=",
+                                received,
+                                "total=",
+                                total
+                            );
+                            safeUnlink(dest);
+                            return reject(
+                                new Error(
+                                    total
+                                        ? `İndirme eksik tamamlandı (beklenen ${total}, gelen ${received})`
+                                        : "İndirme başarısız veya boş döndü"
+                                )
+                            );
+                        }
+
+                        console.log(
+                            "[DL] Tamamlandı:",
+                            dest,
+                            "received=",
+                            received,
+                            "total=",
+                            total
+                        );
+
                         resolve({
                             received,
                             total,
                             path: dest,
-                        })
-                    );
+                        });
+                    });
                 });
 
                 res.on("error", (err) => {
