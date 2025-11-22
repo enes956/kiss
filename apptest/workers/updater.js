@@ -11,13 +11,13 @@ async function fetchR2Object(bucket, key) {
 }
 
 async function handleVersion(env) {
-  const res = await fetchR2Object(env.LAUNCHER_R2, "version.enc.json");
-  return res || jsonResponse({ error: "version.enc.json not found" }, 404);
+  const res = await fetchR2Object(env.LAUNCHER_R2, "version.json");
+  return res || jsonResponse({ error: "version.json not found" }, 404);
 }
 
 async function handleExecutable(env) {
-  const res = await fetchR2Object(env.LAUNCHER_R2, "KissApp.enc");
-  if (!res) return jsonResponse({ error: "KissApp.enc not found" }, 404);
+  const res = await fetchR2Object(env.LAUNCHER_R2, "KissApp.exe");
+  if (!res) return jsonResponse({ error: "KissApp.exe not found" }, 404);
 
   res.headers.set("Content-Type", "application/octet-stream");
   res.headers.set("Content-Disposition", "attachment; filename=KissApp.exe");

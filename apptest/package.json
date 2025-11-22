@@ -28,7 +28,7 @@
       "!obf*"
     ],
     "extraResources": [
-      "version.enc.json",
+      "version.json",
       "build/icon.ico"
     ],
     "win": {
@@ -52,11 +52,10 @@
     }
   },
   "dependencies": {
-    "adm-zip": "^0.5.16",
+    "asar": "^3.2.0",
     "follow-redirects": "^1.15.11"
   },
   "devDependencies": {
-    "asar": "^3.2.0",
     "electron": "^31.1.0",
     "electron-builder": "^24.13.3",
     "fs-extra": "^11.2.0",

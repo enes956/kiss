@@ -1,12 +1,11 @@
 // =====================================================
-// build.js — FINAL CLEAN VERSION (Dinamik AES ASAR Güncelleme)
+// build.js — FINAL CLEAN VERSION (Şifresiz ASAR Güncelleme)
 // =====================================================
 
 const fs = require("fs-extra");
 const path = require("path");
 const crypto = require("crypto");
 const cp = require("child_process");
-const AdmZip = require("adm-zip");
 const obfuscator = require("javascript-obfuscator");
 
 // -----------------------------------------------------
@@ -15,7 +14,7 @@ const obfuscator = require("javascript-obfuscator");
 const ROOT = process.cwd();                     // app/
 const DIST = path.join(ROOT, "dist");          // build workspace
 const UPDATE_OUT = path.join(ROOT, "dist-update"); // cloud output
-const ASAR_URL = "https://updater.bekapvc.com/app.asar.enc";
+const ASAR_URL = "https://updater.bekapvc.com/app.asar";
 
 // -----------------------------------------------------
 // OBF CONFIG
@@ -65,20 +64,6 @@ function sha256(filePath) {
         .update(fs.readFileSync(filePath))
         .digest("hex")
         .toUpperCase();
-}
-
-function encryptAesGcm(key, data) {
-    const iv = crypto.randomBytes(12);
-    const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
-    const ciphertext = Buffer.concat([cipher.update(data), cipher.final()]);
-    const tag = cipher.getAuthTag();
-    return { iv, tag, ciphertext };
-}
-
-function getVersionMasterKey() {
-    return crypto.createHash("sha256")
-        .update("KISSAPP_VERSION_MASTER_KEY_V1")
-        .digest();
 }
 
 // -----------------------------------------------------
@@ -162,54 +147,34 @@ async function main() {
     console.log("📌 ASAR SHA256:", asarHash);
     console.log("📌 ASAR Size:", asarSize);
 
-    // 6 — Encrypt app.asar ------------------------------------------------
-    const asarKey = crypto.randomBytes(32);
-    const zip = new AdmZip();
-    zip.addLocalFile(asarPath, "", "app.asar");
-    const zipBuf = zip.toBuffer();
-
-    console.log("🔐 app.asar.zip AES ile şifreleniyor...");
-    const { iv, tag, ciphertext } = encryptAesGcm(asarKey, zipBuf);
-    const encBuf = Buffer.concat([iv, tag, ciphertext]);
-
-    const encAsarPath = path.join(UPDATE_OUT, "app.asar.enc");
-    fs.writeFileSync(encAsarPath, encBuf);
+    // 6 — app.asar çıktısını aynen kopyala --------------------------------
+    const plainAsarPath = path.join(UPDATE_OUT, "app.asar");
+    fs.copyFileSync(asarPath, plainAsarPath);
 
     // 7 — Build version.json (plain) -------------------------------------
     const versionPayload = {
         version,
         size: asarSize,
         sha256: asarHash,
-        asarUrl: ASAR_URL,
-        asarKey: asarKey.toString("base64")
+        asarUrl: ASAR_URL
     };
 
     const plainBuf = Buffer.from(JSON.stringify(versionPayload));
 
-    // 8 — Encrypt version.json → version.enc.json -------------------------
-    const vmk = getVersionMasterKey();
-    const e = encryptAesGcm(vmk, plainBuf);
-
-    const encVersionJson = {
-        iv: e.iv.toString("base64"),
-        tag: e.tag.toString("base64"),
-        data: e.ciphertext.toString("base64")
-    };
-
     fs.writeFileSync(
         path.join(UPDATE_OUT, "version.json"),
-        JSON.stringify(encVersionJson, null, 2)
+        JSON.stringify(JSON.parse(plainBuf.toString("utf8")), null, 2)
     );
 
     fs.writeFileSync(
-        path.join(DIST, "version.enc.json"),
-        JSON.stringify(encVersionJson, null, 2)
+        path.join(DIST, "version.json"),
+        JSON.stringify(JSON.parse(plainBuf.toString("utf8")), null, 2)
     );
 
-    // 9 — Summary ----------------------------------------------------------
+    // 8 — Summary ----------------------------------------------------------
     console.log("\n🎉 BUILD TAMAMLANDI!");
     console.log("📤 Cloud’a atılacaklar:");
-    console.log("   ✔", encAsarPath);
+    console.log("   ✔", plainAsarPath);
     console.log("   ✔", path.join(UPDATE_OUT, "version.json"));
 }
 

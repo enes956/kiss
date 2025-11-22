@@ -1,0 +1,51 @@
+# KissApp Kod İncelemesi - v1
+
+## Odak: Güncelleme Akışı (Electron main → renderer)
+- main.js içinde eksik olan `setupUpdateIpc` tanımlanarak UPDATE_* IPC kanalları ana süreç ile render süreci arasında yeniden bağlandı.
+- `UPDATE_CHECK` artık uzaktaki `version.json`'u çözüp meta bilgiyi (sürüm, boyut) renderer'a gönderiyor ve mevcut sürümle kıyaslayarak `need-update` / `up-to-date` durumlarını yayımlıyor.
+- `UPDATE_DONE` ana süreç tarafından da yeniden yayınlanıyor; böylece update ekranı tamamlandığında login ekranına otomatik geçiş tetikleniyor.
+- `UPDATE_START` indirme/uygulama hatalarını renderer'a anlamlı mesajlarla geri iletiyor; boş pending veri durumunda kullanıcıya hata döndürülüyor.
+- HTTP istekleri için Content-Length başlığı eklendi; bazı sunucuların gövdeyi reddetme sorunu giderildi.
+
+## Odak: Login Akışı
+- Login isteği sırasında Content-Length'in otomatik eklenmemesi PowerShell/Electron ortamında kimlik doğrulama hatalarına yol açıyordu; istemci artık gövde uzunluğunu belirtiyor.
+- Update ekranı tamamlanmadan login görünümüne geçilememe problemi, ana sürecin `UPDATE_DONE` yayını ile çözüldü.
+
+## Notlar
+- Güncellemeler kullanıcı verisi dizinindeki `updates/` klasörüne indiriliyor; `applyStartupPatch` yalnızca paketli çalışmada tetikleniyor.
+- renderer tarafı `UPDATE_*` olaylarını yalnızca ana süreçten alıyor; yeni köprüleme ile update → login geçişi deterministik hale geldi.
+
+## Patch Uygulama Sertleştirmeleri
+- İndirilen asar dosyasının adı `app_new.asar` olarak netleştirildi; hash değeri `update_pending.json` içinde saklanıp açılışta doğrulanıyor.
+- Önceki çıktılarla uyum için `app_new.bin` okunmaya devam ediliyor, ancak hash uyuşmazlığında hem dosya hem pending işareti temizlenerek yeniden indirme isteniyor.
+
+## Bozuk Paketlerin Engellenmesi
+- İndirilen ASAR içeriği ZIP'ten çıkarıldıktan sonra `asar.listPackage` ile offline doğrulanıyor; header veya içerik bozuksa pending bırakılmadan hata veriliyor.
+- Açılışta patch uygulanmadan önce aynı doğrulama çalıştırılıyor, böylece `Invalid package ...\app_new.asar` hatasıyla uygulamanın döngüye girmesi engelleniyor.
+
+## Patch Uygulama Yenilemesi
+- `applyStartupPatch`, `app.asar` değiştirildikten sonra ana süreci yeniden başlatır; böylece yeni paket aynı açılışta yüklenir ve güncelleme ekranı tekrar tekrar sürüm istemez.
+
+## Asar Doğrulaması İçin Bağımlılık Güncellemesi
+- `asar` modülü prod bağımlılığına taşındı; böylece paketli kurulumda `Cannot find module 'asar'` hatası olmadan offline doğrulama çalışmaya devam eder.
+
+## Güncelleme Adımlarında Ayrıntılı Loglama
+- `performUpdate` artık indirilen baytları, Content-Length değerini, AES sonrası ZIP boyutunu, ZIP entry listesini, çıkarılan ASAR boyutunu ve hash eşleşmesini konsola yazıyor; meta boyut ile uyuşmazlık veya hash hatasında ayrıntılı mesaj üretiyor.
+- `applyStartupPatch` pending ASAR'ın boyutunu logluyor, doğrulama hatası alırsa bozuk dosyayı otomatik siliyor ve stack bilgisini yazıyor. Böylece `Invalid package ...\app_new.asar` hatalarının hangi aşamada üretildiği net şekilde takip edilebiliyor.
+
+[2024-11-22] DEV modunda patch atlama
+- `applyStartupPatch`, `app.isPackaged === false` iken patch denemesini tamamen atlıyor; node_modules içindeki Electron resources path’i korunuyor ve development ortamında görülen “Invalid package .../app_new.asar” hataları sonlandırılıyor.
+- Pending dosyası dev modda sadece loglanıyor, patch paketli kurulumda uygulanmaya devam ediyor.
+
+[2024-11-23] İndirme bütünlüğü ve şifre çözme guard’ları
+- Güncelleme indiricisinde Content-Length ile gelen bayt sayısı kıyaslanıyor; eksik/boş dosya anında silinip hata yükseltiliyor.
+- AES-GCM çözümü ve ZIP açma adımları ayrı try/catch bloklarına alındı; yanlış anahtar veya bozuk zip paketleri erken aşamada anlamlı hata mesajlarıyla kesiliyor.
+- ASAR diske yazılırken veya offline doğrulamadan geçemezse dosya ve pending flag otomatik temizleniyor; bozuk paketle tekrar deneme döngüsü durduruluyor.
+
+[2024-11-24] Şifresiz güncelleme paketi
+- Güncelleme hattındaki AES/ZIP adımları kaldırıldı; `version.json` düz okunuyor ve `app.asar` şifresiz indiriliyor.
+- `main.js` boyut + hash doğrulamasını ve `asar.listPackage` kontrolünü koruyarak `app_new.asar` yazıyor, bozuk paketleri hemen temizliyor.
+- Build hattı şifresiz `dist-update/app.asar` ve düz `version.json` üretip yükleme için listeliyor; Cloudflare Worker uçları da `/app.asar` ve düz metadata servis ediyor.
+
+[2024-11-24] version.json uyumluluk çözümü
+- `main.js` artık `version.json` içeriğini normalize ediyor; düz alanlar yoksa base64 gömülü payload çözülerek `version/sha256/asarUrl` alanları çıkarılıyor ve göreli `asarUrl` adresleri otomatik tamamlanıyor.
