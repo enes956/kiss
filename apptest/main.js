@@ -238,7 +238,8 @@ async function performUpdate(remote, sendStatus) {
     const dir = getUpdateDir();
     const ENC = path.join(dir, "app_asar.enc");
     const ZIP = path.join(dir, "app_asar.zip");
-    const NEW = path.join(dir, "app_new.bin"); // asar OTP olarak saklanacak
+    const NEW = path.join(dir, "app_new.asar"); // renderer loglarına uyan net isim
+    const LEGACY_NEW = path.join(dir, "app_new.bin");
     const PENDING = path.join(dir, "update_pending.json");
 
     // Temizle
@@ -246,6 +247,7 @@ async function performUpdate(remote, sendStatus) {
     safeUnlink(ZIP);
     safeUnlink(NEW);
     safeUnlink(PENDING);
+    safeUnlink(LEGACY_NEW);
 
     sendStatus(CHANNELS.UPDATE_DOWNLOAD_STATUS, { state: "started" });
 
@@ -289,7 +291,7 @@ async function performUpdate(remote, sendStatus) {
         throw new Error("ASAR veri bozuk veya çok küçük!");
     }
 
-    // 4) app_new.bin yaz
+    // 4) app_new.asar yaz
     fs.writeFileSync(NEW, finalBuf);
     console.log("WROTE NEW ASAR:", NEW, "SIZE:", finalBuf.length);
 
@@ -303,6 +305,7 @@ async function performUpdate(remote, sendStatus) {
     const pendingPayload = {
         ready: true,
         version: remote.version,
+        sha256: remote.sha256,
         created_at: new Date().toISOString(),
     };
     fs.writeFileSync(PENDING, JSON.stringify(pendingPayload, null, 2), "utf8");
@@ -389,7 +392,8 @@ function setupUpdateIpc() {
 // =====================================================
 async function applyStartupPatch() {
     const dir = getUpdateDir();
-    const NEW = path.join(dir, "app_new.bin");
+    const NEW = path.join(dir, "app_new.asar");
+    const LEGACY_NEW = path.join(dir, "app_new.bin");
     const PENDING = path.join(dir, "update_pending.json");
 
     if (!fs.existsSync(PENDING)) {
@@ -398,8 +402,14 @@ async function applyStartupPatch() {
 
     console.log("[PATCH] update_pending.json bulundu, patch uygulanacak.");
 
-    if (!fs.existsSync(NEW)) {
-        console.error("[PATCH] app_new.bin bulunamadı, pending temizleniyor.");
+    let newAsarPath = NEW;
+    if (!fs.existsSync(newAsarPath) && fs.existsSync(LEGACY_NEW)) {
+        console.log("[PATCH] app_new.bin bulundu, uyumluluk için kullanılıyor.");
+        newAsarPath = LEGACY_NEW;
+    }
+
+    if (!fs.existsSync(newAsarPath)) {
+        console.error("[PATCH] Yeni ASAR bulunamadı, pending temizleniyor.");
         safeUnlink(PENDING);
         return;
     }
@@ -411,6 +421,27 @@ async function applyStartupPatch() {
             console.log("[PATCH] Pending meta:", metaRaw);
         } catch {
             // ignore
+        }
+
+        // Hash doğrula (varsa)
+        try {
+            const meta = JSON.parse(fs.readFileSync(PENDING, "utf8"));
+            if (meta.sha256) {
+                const hash = await sha256File(newAsarPath);
+                if (hash.toUpperCase() !== meta.sha256.toUpperCase()) {
+                    console.error(
+                        "[PATCH] Hash uyuşmuyor, pending temizleniyor. Beklenen:",
+                        meta.sha256,
+                        "Gelen:",
+                        hash
+                    );
+                    safeUnlink(newAsarPath);
+                    safeUnlink(PENDING);
+                    return;
+                }
+            }
+        } catch (err) {
+            console.error("[PATCH] Hash doğrulanamadı (devam edilecek):", err);
         }
 
         // Eski backup'ı temizle
@@ -427,7 +458,7 @@ async function applyStartupPatch() {
         }
 
         // Yeni asar'ı yerine koy
-        fs.renameSync(NEW, LOCAL_ASAR);
+        fs.renameSync(newAsarPath, LOCAL_ASAR);
         console.log("[PATCH] Yeni app.asar yerine taşındı:", LOCAL_ASAR);
 
         // Pending işaretini temizle
@@ -758,12 +789,12 @@ app.whenReady().then(async () => {
         return;
     }
 
-    // PATCH — SADECE PACKAGED ortamda
+    // PATCH — paketli ortam hedeflenir; dev ortamda pending varsa uyarı ile çalıştırılır
     if (!app.isPackaged) {
-        console.log("[DEV] Paketlenmemiş ortam → applyStartupPatch() SKIP");
-    } else {
-        await applyStartupPatch();
+        console.log("[DEV] Paketlenmemiş ortam, yine de pending varsa patch denenecek.");
     }
+
+    await applyStartupPatch();
 
     createWindow();
     setupUpdateIpc();

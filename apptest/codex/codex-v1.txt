@@ -14,3 +14,7 @@
 ## Notlar
 - Güncellemeler kullanıcı verisi dizinindeki `updates/` klasörüne indiriliyor; `applyStartupPatch` yalnızca paketli çalışmada tetikleniyor.
 - renderer tarafı `UPDATE_*` olaylarını yalnızca ana süreçten alıyor; yeni köprüleme ile update → login geçişi deterministik hale geldi.
+
+## Patch Uygulama Sertleştirmeleri
+- İndirilen asar dosyasının adı `app_new.asar` olarak netleştirildi; hash değeri `update_pending.json` içinde saklanıp açılışta doğrulanıyor.
+- Önceki çıktılarla uyum için `app_new.bin` okunmaya devam ediliyor, ancak hash uyuşmazlığında hem dosya hem pending işareti temizlenerek yeniden indirme isteniyor.
