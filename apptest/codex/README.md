@@ -14,9 +14,10 @@ KissApp, Windows hedefli bir Electron başlatıcısıdır. Ana odak noktası uyg
 - **Yönetici Kontrolü:** Windows’ta oturum gruplarını sorgulayarak yerel admin SID’ini arar; yetki yoksa `runas` kabuğu ile kendini yeniden başlatır.
 - **Güncelleme Sistemi:**
   - Uzak `version.json` dosyasını AES-GCM ile çözer, dinamik `asarKey` alır ve yalnızca izin verilen hosta (`updater.bekapvc.com`) TLS doğrulamasıyla bağlanır.
-  - `app.asar.enc` dosyasını indirir, doğrulanmış ZIP’ten yeni ASAR’ı çıkarır ve `app_new.asar` olarak kullanıcı verisi dizinine yazar.
+- `app.asar.enc` dosyasını indirir, doğrulanmış ZIP’ten yeni ASAR’ı çıkarır ve `app_new.asar` olarak kullanıcı verisi dizinine yazar.
   - İndirme tamamlanmadan `Content-Length` ile karşılaştırma yapar; eksik veya boş dosya anında silinir ve hata verilir. AES çözümü ve ZIP açma adımları ayrı ayrı guard edilerek bozuk veya yanlış şifreli paketler yakalanır.
-  - Hash eşleşirse `update_pending.json` oluşturur; bir sonraki açılışta `applyStartupPatch` eski ASAR’ı yedekleyip yenisiyle değiştirir. ASAR doğrulaması için kullanılan `asar` modülü artık prod bağımlılığına taşındığı için paketli kurulumda eksik modül hatası oluşmaz.
+- Hash eşleşirse `update_pending.json` oluşturur; bir sonraki açılışta `applyStartupPatch` eski ASAR’ı yedekleyip yenisiyle değiştirir. ASAR doğrulaması için kullanılan `asar` modülü artık prod bağımlılığına taşındığı için paketli kurulumda eksik modül hatası oluşmaz.
+  - ASAR diske yazılamaz veya doğrulamadan geçemezse dosya ve pending flag hemen silinir; böylece bozuk paketlerle döngüye girilmez.
   - Eksik kalan IPC köprüsü tamamlandı: UPDATE_* kanalları artık renderer’dan gelen `update:check` / `update:start` / `update:done` isteklerini dinler, durum/ilerleme ve hata mesajlarını renderer’a geri yollar. Güncel sürümde otomatik login geçişi için `update:done` ana süreç tarafından yeniden yayınlanır.
   - Güncelleme sürecinin her adımı artık loglanıyor: indirilen baytlar ve Content-Length, AES çözümünden çıkan ZIP boyutu, ZIP entry listesi, çıkarılan ASAR boyutu, hash doğrulaması ve pending flag yazımı konsola düşüyor. Patch aşaması da bulunan ASAR boyutunu ve doğrulama sonucunu raporluyor; bozuk dosya tespit edilirse otomatik olarak siliniyor.
   - `applyStartupPatch` artık `app.isPackaged === false` iken patch denemesini tamamen atlıyor; development modunda Electron’un kendi `resources/app.asar` dosyası değiştirilmediği için “Invalid package .../app_new.asar” hataları kesiliyor. Pending dosyası dev modda yalnızca bilgilendirme amaçlı loglanır.

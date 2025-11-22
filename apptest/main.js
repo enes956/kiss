@@ -353,9 +353,16 @@ async function performUpdate(remote, sendStatus) {
     }
 
     // 4) app_new.asar yaz + doğrula
-    fs.writeFileSync(NEW, finalBuf, { flag: "w" });
-    assertValidAsar(NEW);
-    console.log("WROTE NEW ASAR:", NEW, "SIZE:", finalBuf.length);
+    try {
+        fs.writeFileSync(NEW, finalBuf, { flag: "w" });
+        assertValidAsar(NEW);
+        console.log("WROTE NEW ASAR:", NEW, "SIZE:", finalBuf.length);
+    } catch (err) {
+        console.error("[UPDATE] Yeni ASAR diske yazılamadı veya bozuk:", err);
+        safeUnlink(NEW);
+        safeUnlink(PENDING);
+        throw err;
+    }
 
     // 5) Hash doğrula
     const hash = (await sha256File(NEW)).toUpperCase();
@@ -573,7 +580,16 @@ async function applyStartupPatch() {
         } catch {
             // ignore
         }
-        // İstersen burada pending'i silmeyip sonraki açılışta tekrar deneyebilirsin.
+
+        // Pending flag'in bozuk ASAR ile tekrar denenmesini engelle
+        try {
+            if (fs.existsSync(PENDING)) {
+                console.log("[PATCH] Pending flag temizleniyor (hatalı paket).");
+                safeUnlink(PENDING);
+            }
+        } catch {
+            // ignore
+        }
     }
 }
 
