@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { execFile, execSync } = require("child_process");
+const asar = require("asar");
 
 // --- Admin kontrolü (SID yöntemi) ---
 function isRunningAsAdmin() {
@@ -67,6 +68,22 @@ function safeUnlink(p) {
         if (fs.existsSync(p)) fs.unlinkSync(p);
     } catch {
         // ignore
+    }
+}
+
+function assertValidAsar(filePath) {
+    const stat = fs.statSync(filePath);
+    if (!stat || stat.size < 5000) {
+        throw new Error("ASAR veri bozuk veya çok küçük!");
+    }
+
+    try {
+        // asar.listPackage okuma yaparak header'ı doğrular; başarısız olursa istisna fırlatır
+        asar.listPackage(filePath);
+    } catch (err) {
+        throw new Error(
+            `ASAR doğrulaması başarısız (${path.basename(filePath)}): ${err.message}`
+        );
     }
 }
 
@@ -282,17 +299,12 @@ async function performUpdate(remote, sendStatus) {
 
     console.log("ZIP ENTRY:", entry.entryName, "SIZE:", entry.header.size);
 
-    const raw = entry.getData();
+    // `getData` buffer'ını kopyalayarak header bütünlüğünü koru
+    const finalBuf = Buffer.from(entry.getData());
 
-    // Uint8Array → Buffer (header bozulmasın)
-    const finalBuf = Buffer.from(raw.buffer, raw.byteOffset, raw.byteLength);
-
-    if (finalBuf.length < 5000) {
-        throw new Error("ASAR veri bozuk veya çok küçük!");
-    }
-
-    // 4) app_new.asar yaz
-    fs.writeFileSync(NEW, finalBuf);
+    // 4) app_new.asar yaz + doğrula
+    fs.writeFileSync(NEW, finalBuf, { flag: "w" });
+    assertValidAsar(NEW);
     console.log("WROTE NEW ASAR:", NEW, "SIZE:", finalBuf.length);
 
     // 5) Hash doğrula
@@ -443,6 +455,9 @@ async function applyStartupPatch() {
         } catch (err) {
             console.error("[PATCH] Hash doğrulanamadı (devam edilecek):", err);
         }
+
+        // Yeni ASAR dosyasını swap'ten önce doğrula
+        assertValidAsar(newAsarPath);
 
         // Eski backup'ı temizle
         if (fs.existsSync(BACKUP_ASAR)) {

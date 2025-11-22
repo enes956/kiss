@@ -19,5 +19,9 @@
 - İndirilen asar dosyasının adı `app_new.asar` olarak netleştirildi; hash değeri `update_pending.json` içinde saklanıp açılışta doğrulanıyor.
 - Önceki çıktılarla uyum için `app_new.bin` okunmaya devam ediliyor, ancak hash uyuşmazlığında hem dosya hem pending işareti temizlenerek yeniden indirme isteniyor.
 
+## Bozuk Paketlerin Engellenmesi
+- İndirilen ASAR içeriği ZIP'ten çıkarıldıktan sonra `asar.listPackage` ile offline doğrulanıyor; header veya içerik bozuksa pending bırakılmadan hata veriliyor.
+- Açılışta patch uygulanmadan önce aynı doğrulama çalıştırılıyor, böylece `Invalid package ...\app_new.asar` hatasıyla uygulamanın döngüye girmesi engelleniyor.
+
 ## Patch Uygulama Yenilemesi
 - `applyStartupPatch`, `app.asar` değiştirildikten sonra ana süreci yeniden başlatır; böylece yeni paket aynı açılışta yüklenir ve güncelleme ekranı tekrar tekrar sürüm istemez.
