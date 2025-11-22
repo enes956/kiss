@@ -25,3 +25,6 @@
 
 ## Patch Uygulama Yenilemesi
 - `applyStartupPatch`, `app.asar` değiştirildikten sonra ana süreci yeniden başlatır; böylece yeni paket aynı açılışta yüklenir ve güncelleme ekranı tekrar tekrar sürüm istemez.
+
+## Asar Doğrulaması İçin Bağımlılık Güncellemesi
+- `asar` modülü prod bağımlılığına taşındı; böylece paketli kurulumda `Cannot find module 'asar'` hatası olmadan offline doğrulama çalışmaya devam eder.
