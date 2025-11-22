@@ -446,6 +446,20 @@ async function applyStartupPatch() {
     const LEGACY_NEW = path.join(dir, "app_new.bin");
     const PENDING = path.join(dir, "update_pending.json");
 
+    // Development modunda Electron'un kendi resources path'ini (node_modules/electron/dist/resources)
+    // yamalamak istemiyoruz; patchler yalnızca paketli kurulumda uygulanmalı.
+    if (!app.isPackaged) {
+        if (fs.existsSync(PENDING)) {
+            console.log(
+                "[PATCH] app.isPackaged=false, pending bulundu ancak dev modda patch atlanıyor:",
+                PENDING
+            );
+        } else {
+            console.log("[PATCH] app.isPackaged=false, patch denemesi atlandı (dev mod).");
+        }
+        return;
+    }
+
     if (!fs.existsSync(PENDING)) {
         return; // patch beklenmiyor
     }

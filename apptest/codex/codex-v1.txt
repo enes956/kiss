@@ -32,3 +32,7 @@
 ## Güncelleme Adımlarında Ayrıntılı Loglama
 - `performUpdate` artık indirilen baytları, Content-Length değerini, AES sonrası ZIP boyutunu, ZIP entry listesini, çıkarılan ASAR boyutunu ve hash eşleşmesini konsola yazıyor; meta boyut ile uyuşmazlık veya hash hatasında ayrıntılı mesaj üretiyor.
 - `applyStartupPatch` pending ASAR'ın boyutunu logluyor, doğrulama hatası alırsa bozuk dosyayı otomatik siliyor ve stack bilgisini yazıyor. Böylece `Invalid package ...\app_new.asar` hatalarının hangi aşamada üretildiği net şekilde takip edilebiliyor.
+
+[2024-11-22] DEV modunda patch atlama
+- `applyStartupPatch`, `app.isPackaged === false` iken patch denemesini tamamen atlıyor; node_modules içindeki Electron resources path’i korunuyor ve development ortamında görülen “Invalid package .../app_new.asar” hataları sonlandırılıyor.
+- Pending dosyası dev modda sadece loglanıyor, patch paketli kurulumda uygulanmaya devam ediyor.
