@@ -98,7 +98,19 @@ function doRequest(url, options = {}, body, timeoutMs = 8000) {
             expectedHost = options.host || "";
         }
 
-        const req = https.request(url, options, (res) => {
+        const normalizedOptions = { ...options };
+
+        if (body && !normalizedOptions.headers) {
+            normalizedOptions.headers = {};
+        }
+
+        if (body && normalizedOptions.headers) {
+            normalizedOptions.headers["Content-Length"] = Buffer.byteLength(
+                body
+            );
+        }
+
+        const req = https.request(url, normalizedOptions, (res) => {
             let chunks = [];
             let totalLength = 0;
             const MAX_BYTES = 2 * 1024 * 1024;
@@ -304,6 +316,72 @@ async function performUpdate(remote, sendStatus) {
         app.relaunch();
         app.exit(0);
     }, 1000);
+}
+
+// ---------------------------------------------------------------------
+// UPDATE IPC KÖPRÜSÜ
+// ---------------------------------------------------------------------
+function setupUpdateIpc() {
+    const sendToRenderer = (channel, payload) => {
+        if (!mainWin || mainWin.isDestroyed()) return;
+        mainWin.webContents.send(channel, payload);
+    };
+
+    ipcMain.on(CHANNELS.UPDATE_CHECK, async () => {
+        sendToRenderer(CHANNELS.UPDATE_STATUS, "checking");
+
+        try {
+            const remote = await fetchRemoteVersion();
+            pendingUpdate = remote;
+
+            sendToRenderer(CHANNELS.UPDATE_REMOTE_DATA, {
+                version: remote.version,
+                size: remote.size,
+            });
+
+            const needsUpdate = pkg.version !== remote.version;
+            sendToRenderer(
+                CHANNELS.UPDATE_STATUS,
+                needsUpdate ? "need-update" : "up-to-date"
+            );
+
+            if (!needsUpdate) {
+                sendToRenderer(CHANNELS.UPDATE_DONE);
+            }
+        } catch (err) {
+            console.error("[UPDATE] Versiyon kontrolü başarısız:", err);
+            sendToRenderer(CHANNELS.UPDATE_DOWNLOAD_STATUS, {
+                state: "error",
+                message: err?.message || "Güncelleme kontrolü yapılamadı.",
+            });
+            sendToRenderer(CHANNELS.UPDATE_STATUS, "error");
+        }
+    });
+
+    ipcMain.on(CHANNELS.UPDATE_START, async () => {
+        if (!pendingUpdate) {
+            sendToRenderer(CHANNELS.UPDATE_DOWNLOAD_STATUS, {
+                state: "error",
+                message: "İndirilecek güncelleme bilgisi bulunamadı.",
+            });
+            return;
+        }
+
+        try {
+            await performUpdate(pendingUpdate, sendToRenderer);
+        } catch (err) {
+            console.error("[UPDATE] İndirme/uygulama hatası:", err);
+            sendToRenderer(CHANNELS.UPDATE_DOWNLOAD_STATUS, {
+                state: "error",
+                message:
+                    err?.message || "Güncelleme indirilemedi veya doğrulanamadı.",
+            });
+        }
+    });
+
+    ipcMain.on(CHANNELS.UPDATE_DONE, () => {
+        sendToRenderer(CHANNELS.UPDATE_DONE);
+    });
 }
 
 // =====================================================

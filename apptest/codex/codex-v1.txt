@@ -1,0 +1,16 @@
+# KissApp Kod İncelemesi - v1
+
+## Odak: Güncelleme Akışı (Electron main → renderer)
+- main.js içinde eksik olan `setupUpdateIpc` tanımlanarak UPDATE_* IPC kanalları ana süreç ile render süreci arasında yeniden bağlandı.
+- `UPDATE_CHECK` artık uzaktaki `version.json`'u çözüp meta bilgiyi (sürüm, boyut) renderer'a gönderiyor ve mevcut sürümle kıyaslayarak `need-update` / `up-to-date` durumlarını yayımlıyor.
+- `UPDATE_DONE` ana süreç tarafından da yeniden yayınlanıyor; böylece update ekranı tamamlandığında login ekranına otomatik geçiş tetikleniyor.
+- `UPDATE_START` indirme/uygulama hatalarını renderer'a anlamlı mesajlarla geri iletiyor; boş pending veri durumunda kullanıcıya hata döndürülüyor.
+- HTTP istekleri için Content-Length başlığı eklendi; bazı sunucuların gövdeyi reddetme sorunu giderildi.
+
+## Odak: Login Akışı
+- Login isteği sırasında Content-Length'in otomatik eklenmemesi PowerShell/Electron ortamında kimlik doğrulama hatalarına yol açıyordu; istemci artık gövde uzunluğunu belirtiyor.
+- Update ekranı tamamlanmadan login görünümüne geçilememe problemi, ana sürecin `UPDATE_DONE` yayını ile çözüldü.
+
+## Notlar
+- Güncellemeler kullanıcı verisi dizinindeki `updates/` klasörüne indiriliyor; `applyStartupPatch` yalnızca paketli çalışmada tetikleniyor.
+- renderer tarafı `UPDATE_*` olaylarını yalnızca ana süreçten alıyor; yeni köprüleme ile update → login geçişi deterministik hale geldi.
