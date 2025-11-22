@@ -32,7 +32,6 @@ function elevateToAdmin() {
 const { app, BrowserWindow, ipcMain } = require("electron");
 const https = require("https");
 const crypto = require("crypto");
-const AdmZip = require("adm-zip");
 
 const CHANNELS = require("./global/ipcChannels.cjs");
 
@@ -47,7 +46,7 @@ const pkg = JSON.parse(
 );
 
 // ---------------------------------------------------------------------
-// UPDATE (AES ŞİFRELİ, DİNAMİK KEY)
+// UPDATE (ŞİFRESİZ PAKET)
 // ---------------------------------------------------------------------
 
 const VERSION_URL = "https://updater.bekapvc.com/version.json";
@@ -91,20 +90,6 @@ function assertValidAsar(filePath) {
             `ASAR doğrulaması başarısız (${path.basename(filePath)}): ${err.message}`
         );
     }
-}
-
-function decryptAesGcm(key, iv, tag, data) {
-    const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
-    decipher.setAuthTag(tag);
-    return Buffer.concat([decipher.update(data), decipher.final()]);
-}
-
-// SABİT MASTER KEY → SADECE version.json'u açar (küçük metadatanın şifresi)
-function getVersionMasterKey() {
-    return crypto
-        .createHash("sha256")
-        .update("KISSAPP_VERSION_MASTER_KEY_V1")
-        .digest(); // 32 byte
 }
 
 // ---------------------------------------------------------------------
@@ -222,7 +207,7 @@ function doRequest(url, options = {}, body, timeoutMs = 8000) {
 }
 
 // =====================================================
-// 1) version.enc.json → decrypt → metadata + dinamik asarKey alınır
+// 1) version.json → metadata alınır
 // =====================================================
 async function fetchRemoteVersion() {
     const { statusCode, body } = await doRequest(
@@ -234,23 +219,13 @@ async function fetchRemoteVersion() {
 
     if (statusCode !== 200) throw new Error("HTTP " + statusCode);
 
-    const enc = JSON.parse(body.toString("utf8"));
-
-    const iv = Buffer.from(enc.iv, "base64");
-    const tag = Buffer.from(enc.tag, "base64");
-    const cipher = Buffer.from(enc.data, "base64");
-
-    const decrypted = decryptAesGcm(getVersionMasterKey(), iv, tag, cipher);
-    const data = JSON.parse(decrypted.toString("utf8"));
-
-    if (!data.asarKey) throw new Error("asarKey bulunamadı!");
+    const data = JSON.parse(body.toString("utf8"));
 
     return {
         version: data.version,
         sha256: data.sha256.toUpperCase(),
         size: data.size,
         asarUrl: data.asarUrl,
-        asarKey: Buffer.from(data.asarKey, "base64"), // DİNAMİK KEY
     };
 }
 
@@ -259,8 +234,6 @@ async function fetchRemoteVersion() {
 // =====================================================
 async function performUpdate(remote, sendStatus) {
     const dir = getUpdateDir();
-    const ENC = path.join(dir, "app_asar.enc");
-    const ZIP = path.join(dir, "app_asar.zip");
     const NEW = path.join(dir, "app_new.asar"); // renderer loglarına uyan net isim
     const LEGACY_NEW = path.join(dir, "app_new.bin");
     const PENDING = path.join(dir, "update_pending.json");
@@ -268,112 +241,51 @@ async function performUpdate(remote, sendStatus) {
     console.log("[UPDATE] Remote meta:", remote);
 
     // Temizle
-    safeUnlink(ENC);
-    safeUnlink(ZIP);
     safeUnlink(NEW);
     safeUnlink(PENDING);
     safeUnlink(LEGACY_NEW);
 
     sendStatus(CHANNELS.UPDATE_DOWNLOAD_STATUS, { state: "started" });
 
-    // 1) ENC indir
+    // 1) ASAR indir
     const downloadInfo = await downloadFile(
         remote.asarUrl,
-        ENC,
+        NEW,
         (recv, total, percent) => {
             sendStatus(CHANNELS.UPDATE_PROGRESS, { percent });
         }
     );
-    console.log("[UPDATE] ENC indirildi:", downloadInfo);
+    console.log("[UPDATE] ASAR indirildi:", downloadInfo);
 
-    // 2) ENC → ZIP (AES-GCM)
-    const buf = fs.readFileSync(ENC);
-    console.log("[UPDATE] ENC dosya boyutu:", buf.length);
-    const iv = buf.slice(0, 12);
-    const tag = buf.slice(12, 28);
-    const cipher = buf.slice(28);
-
-    let zipBuf;
-    try {
-        zipBuf = decryptAesGcm(remote.asarKey, iv, tag, cipher);
-    } catch (err) {
-        throw new Error("AES çözümü başarısız: " + err.message);
-    }
-
-    if (!zipBuf || !zipBuf.length) {
-        throw new Error("AES çözümünden boş ZIP döndü");
-    }
-
-    console.log("[UPDATE] ZIP buffer boyutu:", zipBuf.length);
-    fs.writeFileSync(ZIP, zipBuf);
-
-    // 3) ZIP → ASAR çıkar
-    let zip;
-    let entries;
-    try {
-        zip = new AdmZip(zipBuf);
-        entries = zip.getEntries();
-    } catch (err) {
-        throw new Error("Zip açılırken hata: " + err.message);
-    }
-
-    if (!entries || entries.length === 0)
-        throw new Error("Zip içinde dosya yok!");
-
-    // Önce .asar, yoksa ilk dosya
-    console.log(
-        "[UPDATE] ZIP entries:",
-        entries.map((e) => `${e.entryName}:${e.header?.size || 0}`)
-    );
-
-    let entry = entries.find(
-        (e) => !e.isDirectory && e.entryName.endsWith(".asar")
-    );
-    if (!entry) entry = entries.find((e) => !e.isDirectory);
-
-    if (!entry) throw new Error("Zip içinde kullanılabilir entry yok!");
-
-    console.log("ZIP ENTRY:", entry.entryName, "SIZE:", entry.header.size);
-
-    // `getData` buffer'ını kopyalayarak header bütünlüğünü koru
-    const finalBuf = Buffer.from(entry.getData());
-    console.log(
-        "[UPDATE] ASAR buffer alındı:",
-        entry.entryName,
-        "zip-size=",
-        entry.header.size,
-        "buf-size=",
-        finalBuf.length
-    );
-
-    if (remote.size && remote.size !== finalBuf.length) {
+    // 2) Boyut doğrula (varsa)
+    const stat = fs.statSync(NEW);
+    if (remote.size && stat.size !== remote.size) {
+        safeUnlink(NEW);
         throw new Error(
-            `ASAR boyutu beklenenle uyuşmuyor. Meta=${remote.size} gelen=${finalBuf.length}`
+            `ASAR boyutu beklenenle uyuşmuyor. Meta=${remote.size} gelen=${stat.size}`
         );
     }
 
-    // 4) app_new.asar yaz + doğrula
+    // 3) Offline doğrulama
     try {
-        fs.writeFileSync(NEW, finalBuf, { flag: "w" });
         assertValidAsar(NEW);
-        console.log("WROTE NEW ASAR:", NEW, "SIZE:", finalBuf.length);
     } catch (err) {
-        console.error("[UPDATE] Yeni ASAR diske yazılamadı veya bozuk:", err);
         safeUnlink(NEW);
         safeUnlink(PENDING);
         throw err;
     }
 
-    // 5) Hash doğrula
+    // 4) Hash doğrula
     const hash = (await sha256File(NEW)).toUpperCase();
     if (hash !== remote.sha256) {
+        safeUnlink(NEW);
         throw new Error(
             `Hash mismatch – beklenen ${remote.sha256}, gelen ${hash}`
         );
     }
     console.log("[UPDATE] Hash doğrulandı:", hash);
 
-    // 6) Startup patch için işaret bırak
+    // 5) Startup patch için işaret bırak
     const pendingPayload = {
         ready: true,
         version: remote.version,
@@ -386,7 +298,7 @@ async function performUpdate(remote, sendStatus) {
     // Renderer'a başarı
     sendStatus(CHANNELS.UPDATE_DOWNLOAD_STATUS, { state: "done" });
 
-    // 7) Restart → patch bir SONRAKİ açılışta uygulanacak
+    // 6) Restart → patch bir SONRAKİ açılışta uygulanacak
     setTimeout(() => {
         app.relaunch();
         app.exit(0);
@@ -607,8 +519,7 @@ function sha256File(file) {
 }
 
 // ---------------------------------------------------------------------
-// Büyük dosya indirme (app.asar.enc)
-// ENC formatı: [IV(12)][TAG(16)][CIPHER(...)]
+// Büyük dosya indirme (app.asar)
 // ---------------------------------------------------------------------
 function downloadFile(url, dest, onProgress, redirectCount = 0) {
     return new Promise((resolve, reject) => {

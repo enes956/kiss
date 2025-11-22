@@ -41,3 +41,8 @@
 - Güncelleme indiricisinde Content-Length ile gelen bayt sayısı kıyaslanıyor; eksik/boş dosya anında silinip hata yükseltiliyor.
 - AES-GCM çözümü ve ZIP açma adımları ayrı try/catch bloklarına alındı; yanlış anahtar veya bozuk zip paketleri erken aşamada anlamlı hata mesajlarıyla kesiliyor.
 - ASAR diske yazılırken veya offline doğrulamadan geçemezse dosya ve pending flag otomatik temizleniyor; bozuk paketle tekrar deneme döngüsü durduruluyor.
+
+[2024-11-24] Şifresiz güncelleme paketi
+- Güncelleme hattındaki AES/ZIP adımları kaldırıldı; `version.json` düz okunuyor ve `app.asar` şifresiz indiriliyor.
+- `main.js` boyut + hash doğrulamasını ve `asar.listPackage` kontrolünü koruyarak `app_new.asar` yazıyor, bozuk paketleri hemen temizliyor.
+- Build hattı şifresiz `dist-update/app.asar` ve düz `version.json` üretip yükleme için listeliyor; Cloudflare Worker uçları da `/app.asar` ve düz metadata servis ediyor.

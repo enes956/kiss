@@ -3,16 +3,16 @@ export default {
     const url = new URL(request.url);
 
     // --------------------------
-    // /version.json   (şifreli Metadata)
+    // /version.json   (düz metadata)
     // --------------------------
     if (url.pathname === "/version.json") {
       return handleVersion(env);
     }
 
     // --------------------------
-    // /app.asar.enc   (şifreli ASAR)
+    // /app.asar   (şifresiz ASAR)
     // --------------------------
-    if (url.pathname === "/app.asar.enc") {
+    if (url.pathname === "/app.asar") {
       return handleAsar(env);
     }
 
@@ -57,7 +57,6 @@ async function handleVersion(env) {
   const buffer = await file.arrayBuffer();
   const text = new TextDecoder().decode(buffer);
 
-  // Worker JE decrypt ETMEZ → Launcher decrypt eder
   return new Response(text, {
     status: 200,
     headers: {
@@ -68,14 +67,14 @@ async function handleVersion(env) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                              /app.asar.enc                                 */
+/*                              /app.asar                                     */
 /* -------------------------------------------------------------------------- */
 
 async function handleAsar(env) {
-  const file = await fetchR2("app.asar.enc", env);
+  const file = await fetchR2("app.asar", env);
 
   if (!file) {
-    return jsonResponse({ error: "app.asar.enc not found" }, 404);
+    return jsonResponse({ error: "app.asar not found" }, 404);
   }
 
   const buffer = await file.arrayBuffer();
@@ -84,7 +83,7 @@ async function handleAsar(env) {
     status: 200,
     headers: {
       "Content-Type": "application/octet-stream",
-      "Cache-Control": "no-store"
+      "Cache-Control": "no-store",
     }
   });
 }
