@@ -1,0 +1,65 @@
+{
+  "name": "KissApp",
+  "version": "0.0.8",
+  "description": "KissApp",
+  "author": "Enes",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "build": "node build.js"
+  },
+  "build": {
+    "appId": "com.kissapp.cloud",
+    "productName": "KissApp",
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "directories": {
+      "output": "dist-build",
+      "buildResources": "build"
+    },
+    "files": [
+      "**/*",
+      "!dist/**/*",
+      "!dist-build/**/*",
+      "!node_modules/.cache/**/*",
+      "!obf*"
+    ],
+    "extraResources": [
+      "version.enc.json",
+      "build/icon.ico"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "KissApp-Setup-${version}.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": true
+    }
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "follow-redirects": "^1.15.11"
+  },
+  "devDependencies": {
+    "asar": "^3.2.0",
+    "electron": "^31.1.0",
+    "electron-builder": "^24.13.3",
+    "fs-extra": "^11.2.0",
+    "javascript-obfuscator": "^4.1.0"
+  }
+}

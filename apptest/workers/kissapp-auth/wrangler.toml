@@ -1,0 +1,9 @@
+name = "kissapp-auth"
+main = "auth.js"
+compatibility_date = "2024-11-01"
+
+kv_namespaces = [
+  { binding = "MY_AUTH_STORE", id = "7250a0a3566641a789a7b6152e447558" }
+]
+
+[vars]
