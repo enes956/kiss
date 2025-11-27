@@ -1,0 +1,92 @@
+{
+  "name": "KissApp",
+  "version": "1.0.2",
+  "description": "KissApp",
+  "author": "Enes",
+  "main": "src/main/app.js",
+
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "build": "node build.js"
+  },
+
+  "build": {
+    "appId": "com.kissapp.cloud",
+    "productName": "KissApp",
+    "asar": true,
+
+    "directories": {
+      "output": "dist-build",
+      "buildResources": "build"
+    },
+
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://updater.bekapvc.com/",
+        "channel": "latest"
+      }
+    ],
+
+    "files": [
+      "**/*",
+      "!dist/**/*",
+      "!dist-build/**/*",
+      "!node_modules/.cache/**/*"
+    ],
+
+    "extraResources": [
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      },
+      {
+        "from": "build/license.txt",
+        "to": "license.txt"
+      },
+      {
+        "from": "build/installer.nsh",
+        "to": "installer.nsh"
+      }
+    ],
+
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "KissApp-${version}.exe"
+    },
+
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": false,
+      "runAfterFinish": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": true,
+      "license": "build/license.txt",
+      "include": "build/installer.nsh"
+    }
+  },
+
+  "dependencies": {
+    "electron-updater": "^6.6.2",
+    "follow-redirects": "^1.15.11",
+    "adm-zip": "^0.5.16"
+  },
+
+  "devDependencies": {
+    "electron": "^31.1.0",
+    "electron-builder": "^24.13.3",
+    "fs-extra": "^11.2.0",
+    "asar": "^3.2.0",
+    "javascript-obfuscator": "^4.1.0"
+  }
+}

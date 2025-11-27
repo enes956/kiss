@@ -1,0 +1,26 @@
+.footer-info {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+    font-size: 13px;
+    opacity: 0.8;
+    gap: 12px;
+}
+
+.footer-info span {
+    flex: 1;
+}
+
+.footer-info .footer-center {
+    text-align: center;
+}
+
+.footer-info .footer-left {
+    text-align: left;
+}
+
+.footer-info .footer-right {
+    text-align: right;
+}

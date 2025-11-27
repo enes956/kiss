@@ -1,0 +1,38 @@
+.logo-area {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-left: 6px;
+}
+
+.logo-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.logo-title {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.window-controls {
+    display: flex;
+    gap: 6px;
+    padding-right: 6px;
+}
+
+.window-control-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+    padding: 0;
+    border-radius: 8px;
+}
+
+.window-control-btn.close {
+    color: var(--danger);
+}
