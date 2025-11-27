@@ -7,6 +7,7 @@ let resizeBound = false;
 let fullscreenSlot = null;
 let runtimeMode = false;
 let compiledBundle = "";
+const slotRuntimeHandles = new Map();
 
 function qs(id) {
     return document.getElementById(id);
@@ -235,17 +236,11 @@ function toggleFullscreen(slotWrapper) {
     setStatus(`View ${slotWrapper.dataset.slot} tam ekranda.`, "success");
 }
 
-function toggleMinimize(slotWrapper) {
-    if (!slotWrapper) return;
-    const minimized = slotWrapper.classList.toggle("minimized");
-    const message = minimized ? "küçültüldü" : "kendi alanında açıldı";
-    setStatus(`View ${slotWrapper.dataset.slot} ${message}.`, "info");
-    if (!minimized) fitWebview(slotWrapper.querySelector("webview"));
-}
-
 function closeSlot(slotWrapper) {
     if (!slotWrapper) return;
     const slotId = slotWrapper.dataset.slot;
+    const view = slotWrapper.querySelector("webview");
+    destroySlotRuntime(Number(slotId), view);
     if (fullscreenSlot === slotId) exitFullscreen();
     if (activeSlot === slotId) activeSlot = null;
     slotWrapper.remove();
@@ -263,11 +258,15 @@ function handleSlotAction(slotWrapper, webview, action) {
         case "fullscreen":
             toggleFullscreen(slotWrapper);
             break;
-        case "minimize":
-            toggleMinimize(slotWrapper);
-            break;
         case "reload":
             try { webview?.reload(); setStatus(`View ${slotWrapper.dataset.slot} yenilendi.`, "info"); } catch {}
+            break;
+        case "pin":
+            slotWrapper.classList.toggle("pinned");
+            setStatus(
+                `View ${slotWrapper.dataset.slot} ${slotWrapper.classList.contains("pinned") ? "üstte tutuluyor" : "normal görünüme alındı"}.`,
+                "info",
+            );
             break;
         case "close":
             closeSlot(slotWrapper);
@@ -277,14 +276,59 @@ function handleSlotAction(slotWrapper, webview, action) {
     }
 }
 
+async function injectSlotRuntime(webview, slot) {
+    if (!compiledBundle) return;
+    try {
+        await webview.executeJavaScript(compiledBundle);
+        await webview.executeJavaScript(`
+            (function(){
+                try {
+                    window.__kissPrepareBridge?.({ slot: ${slot}, startedAt: Date.now() });
+                    const runtime = window.__kissBootstrapToolkit?.(window.__KISS_MODULE_DEFINITIONS__ || [], { slot: ${slot}, tickInterval: 1000 });
+                    if (runtime) {
+                        window.__KISS_SLOT_RUNTIMES__ = window.__KISS_SLOT_RUNTIMES__ || {};
+                        window.__KISS_SLOT_RUNTIMES__[${slot}] = runtime;
+                    }
+                } catch (err) {
+                    console.error('Slot runtime başlatılamadı', err);
+                }
+            })();
+        `);
+        slotRuntimeHandles.set(slot, webview);
+    } catch (err) {
+        console.error("Slot scriptleri enjekte edilemedi", err);
+        setStatus("Scriptler enjekte edilemedi. Ayarları kontrol edin.", "danger");
+    }
+}
+
+async function destroySlotRuntime(slot, webview) {
+    try {
+        await webview?.executeJavaScript(`
+            try {
+                const ctx = window.__KISS_SLOT_RUNTIMES__?.[${slot}];
+                ctx?.destroy?.();
+                if (window.__KISS_SLOT_RUNTIMES__) delete window.__KISS_SLOT_RUNTIMES__[${slot}];
+            } catch (err) { console.error(err); }
+        `);
+    } catch {}
+    slotRuntimeHandles.delete(slot);
+}
+
+function destroyAllSlotRuntimes() {
+    slotRuntimeHandles.forEach((webview, slot) => {
+        destroySlotRuntime(slot, webview);
+    });
+    slotRuntimeHandles.clear();
+}
+
 function attachSlotControls(slotWrapper, webview) {
     const controls = document.createElement("div");
     controls.className = "slot-controls";
     controls.innerHTML = `
         <button type="button" data-action="focus">Öne al</button>
         <button type="button" data-action="fullscreen">Tam ekran</button>
-        <button type="button" data-action="minimize">Küçült</button>
         <button type="button" data-action="reload">Yenile</button>
+        <button type="button" data-action="pin">Üstte tut</button>
         <button type="button" data-action="close" class="danger">Kapat</button>
     `;
 
@@ -298,7 +342,7 @@ function attachSlotControls(slotWrapper, webview) {
     slotWrapper.appendChild(controls);
 }
 
-function mountWebview(slot, bundle, options) {
+function mountWebview(slot, options) {
     const grid = qs("contentGrid");
     if (!grid) return;
 
@@ -322,13 +366,7 @@ function mountWebview(slot, bundle, options) {
 
     webview.addEventListener("dom-ready", () => {
         webview.insertCSS("::-webkit-scrollbar{display:none!important;} html,body{margin:0;padding:0;overflow:hidden;}");
-        if (bundle) {
-            try {
-                webview.executeJavaScript(bundle).catch(() => {});
-            } catch (err) {
-                console.error("Script paketi enjekte edilemedi", err);
-            }
-        }
+        injectSlotRuntime(webview, slot);
         fitWebview(webview);
     });
 
@@ -345,6 +383,7 @@ function mountWebview(slot, bundle, options) {
 function resetGrid() {
     const grid = qs("contentGrid");
     if (!grid) return;
+    destroyAllSlotRuntimes();
     grid.innerHTML = "";
     grid.dataset.count = "0";
     exitFullscreen();
@@ -433,7 +472,7 @@ function bindActions() {
         }
 
         setLayoutMode("runtime");
-        options.slice(0, count).forEach((opt) => mountWebview(opt.slot, compiledBundle, opt));
+        options.slice(0, count).forEach((opt) => mountWebview(opt.slot, opt));
         currentCount = count;
         updateRuntimeSummary(count, runtimeScripts);
         fitAllWebviews();
