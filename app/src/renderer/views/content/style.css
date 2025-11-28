@@ -87,6 +87,8 @@
 .content-form {
   display: grid;
   gap: 14px;
+  grid-template-rows: auto 1fr auto;
+  min-height: 520px;
 }
 
 .setup-grid {
@@ -135,13 +137,38 @@
 .input { width: 100%; border-radius: 10px; border: 1px solid var(--border); background: rgba(255,255,255,0.04); color: var(--text); padding: 10px; }
 .input.select { appearance: none; }
 
-.script-list { display: grid; gap: 8px; }
+.script-list {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 6px;
+}
+.script-list::-webkit-scrollbar {
+  width: 8px;
+}
+.script-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+}
+.script-list::-webkit-scrollbar-thumb {
+  background: rgba(94, 183, 255, 0.4);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
 .script-row { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.03); backdrop-filter: blur(4px); }
 .script-name { margin: 0; font-weight: 700; }
 .script-desc { margin: 2px 0 0 0; color: var(--muted); font-size: 13px; }
 
-.content-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.action-group { display: flex; gap: 10px; }
+.content-footer {
+  display: grid;
+  gap: 12px;
+}
+.action-group {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
 
 .status-line, .runtime-status {
   padding: 10px 12px;
