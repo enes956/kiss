@@ -47,10 +47,12 @@ export default function buildContentTemplate() {
                     </div>
 
                     <footer class="content-footer">
-                        <div class="status-line" id="contentStatus" role="status">Hazır. Start ile görünüm setini başlatın.</div>
-                        <div class="action-group">
-                            <button type="button" id="resetGrid" class="ghost">Temizle</button>
-                            <button type="submit" class="primary">Start</button>
+                        <div class="content-card action-card">
+                            <div class="status-line" id="contentStatus" role="status">Hazır. Start ile görünüm setini başlatın.</div>
+                            <div class="action-group">
+                                <button type="button" id="resetGrid" class="ghost">Temizle</button>
+                                <button type="submit" class="primary">Start</button>
+                            </div>
                         </div>
                     </footer>
                 </form>

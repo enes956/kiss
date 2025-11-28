@@ -162,8 +162,21 @@
 
 .content-footer {
   display: grid;
-  gap: 12px;
+  margin-top: auto;
 }
+
+.action-card {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+}
+
+.action-card .status-line {
+  flex: 1;
+}
+
 .action-group {
   display: flex;
   gap: 10px;
