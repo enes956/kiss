@@ -69,7 +69,7 @@ function renderScripts(list) {
         const row = document.createElement("label");
         row.className = "script-row";
         const displayName = script.displayName || script.name.replace(/\.js$/i, "");
-        const description = script.description || `${displayName} modülü · paket içine eklenir.`;
+        const description = script.description || `${displayName} modülü – paket içine eklenir.`;
         row.innerHTML = `
             <input type="checkbox" class="script-toggle" name="script-${idx}" value="${script.name}" checked />
             <div class="script-meta">
@@ -336,7 +336,7 @@ function resetGrid() {
     const summary = qs("runtimeSummary");
     if (summary) summary.textContent = "—";
     compiledBundle = "";
-    setStatus("Hazır. Start ile görünüm setini başlatın.", "info");
+    setStatus("Start için hazır. Slot ve modül seçimini yapın.", "info");
 }
 
 function stopRuntime() {

@@ -42,21 +42,17 @@ export default function buildContentTemplate() {
                                     <p class="hint">app/scripts/modules içindeki modüller otomatik listelenir. Seçilenler paketlenir ve her slota enjekte edilir.</p>
                                 </div>
                             </div>
-                            <div id="scriptList" class="script-list"></div>
-                        </div>
-                    </div>
-
-                    <footer class="content-footer">
-                        <div class="content-card status-card">
-                            <div class="status-line" id="contentStatus" role="status">Hazır. Start ile görünüm setini başlatın.</div>
-                        </div>
-                        <div class="content-card action-card">
-                            <div class="action-group">
-                                <button type="button" id="resetGrid" class="ghost">Temizle</button>
-                                <button type="submit" class="primary">Start</button>
+                            <div class="script-scroll">
+                                <div id="scriptList" class="script-list"></div>
                             </div>
                         </div>
-                    </footer>
+                    </div>
+                    <div class="content-card action-card">
+                        <div class="action-group">
+                            <button type="button" id="resetGrid" class="ghost">Temizle</button>
+                            <button type="submit" class="primary">Start</button>
+                        </div>
+                    </div>
                 </form>
             </section>
 
@@ -74,7 +70,7 @@ export default function buildContentTemplate() {
                         <button type="button" id="backToSetup" class="pill-btn ghost">Ayar Ekranına Dön</button>
                     </div>
                 </header>
-                <div class="runtime-status" id="runtimeStatus" role="status">Hazır. Start ile görünüm setini başlatın.</div>
+                <div class="runtime-status" id="runtimeStatus" role="status">Durum bekleniyor. Start sonrası güncellenecek.</div>
                 <div id="contentGrid" class="content-webview-grid" data-count="0"></div>
             </section>
         </main>

@@ -87,7 +87,7 @@
 .content-form {
   display: grid;
   gap: 14px;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: 1fr auto;
   min-height: 520px;
 }
 
@@ -137,39 +137,34 @@
 .input { width: 100%; border-radius: 10px; border: 1px solid var(--border); background: rgba(255,255,255,0.04); color: var(--text); padding: 10px; }
 .input.select { appearance: none; }
 
-.script-list {
-  display: grid;
-  gap: 8px;
-  max-height: 360px;
-  overflow: auto;
-  padding-right: 6px;
+.script-scroll {
+  max-height: 340px;
+  min-height: 300px;
+  overflow-y: auto;
+  padding: 4px 6px 4px 2px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
 }
-.script-list::-webkit-scrollbar {
+.script-scroll::-webkit-scrollbar {
   width: 8px;
 }
-.script-list::-webkit-scrollbar-track {
+.script-scroll::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.03);
   border-radius: 10px;
 }
-.script-list::-webkit-scrollbar-thumb {
+.script-scroll::-webkit-scrollbar-thumb {
   background: rgba(94, 183, 255, 0.4);
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
+.script-list {
+  display: grid;
+  gap: 8px;
+}
 .script-row { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.03); backdrop-filter: blur(4px); }
 .script-name { margin: 0; font-weight: 700; }
 .script-desc { margin: 2px 0 0 0; color: var(--muted); font-size: 13px; }
-
-
-.content-footer {
-  display: grid;
-  gap: 10px;
-  margin-top: auto;
-}
-
-.status-card {
-  padding: 10px 12px;
-}
 
 .action-card {
   display: flex;
