@@ -3,6 +3,7 @@ const path = require("path");
 
 const coreDir = path.join(__dirname, "..", "..", "..", "scripts", "core");
 const scriptsDir = path.join(__dirname, "..", "..", "..", "scripts", "modules");
+const bootstrapPath = path.join(__dirname, "..", "..", "..", "scripts", "bootstrap.js");
 
 function safeRead(filePath) {
     try {
@@ -18,6 +19,7 @@ function readList(dirPath) {
         return fs
             .readdirSync(dirPath)
             .filter((file) => file.toLowerCase().endsWith(".js"))
+            .sort()
             .map((file) => path.join(dirPath, file));
     } catch (err) {
         console.warn("Klasör okunamadı:", dirPath, err.message);
@@ -27,9 +29,11 @@ function readList(dirPath) {
 
 function extractMeta(code, fallbackName) {
     const titleMatch = code.match(/title:\s*["']([^"']+)/i);
+    const descriptionMatch = code.match(/description:\s*["']([^"']+)/i);
     const factoryMatch = code.match(/function\s+(create[\w]+Module)/);
     return {
         title: titleMatch?.[1] || fallbackName,
+        description: descriptionMatch?.[1] || null,
         factory: factoryMatch?.[1] || null,
     };
 }
@@ -41,11 +45,15 @@ function loadScripts() {
         try {
             const code = safeRead(filePath);
             const meta = extractMeta(code, path.basename(filePath));
+            const displayName = path.basename(filePath, ".js");
             scripts.push({
                 name: path.basename(filePath),
                 code,
                 title: meta.title,
+                description: meta.description,
+                displayName,
                 factory: meta.factory,
+                hidden: path.basename(filePath) === "ModuleManager.js",
             });
         } catch (err) {
             console.error("Script okunamadı:", filePath, err);
@@ -57,64 +65,38 @@ function loadScripts() {
 
 function buildBundle(selectedNames = []) {
     const allScripts = loadScripts();
-    const selected = allScripts.filter((s) => selectedNames.includes(s.name) && s.name !== "ModuleManager.js");
-    const moduleManager = allScripts.find((s) => s.name === "ModuleManager.js");
-
-    const bundleScripts = [moduleManager, ...selected].filter(Boolean);
+    const selection = new Set(selectedNames);
+    const manager = allScripts.find((s) => s.name === "ModuleManager.js");
+    if (manager) selection.add(manager.name);
+    const selected = allScripts.filter((s) => selection.has(s.name));
 
     const coreFiles = readList(coreDir).map((p) => safeRead(p)).join("\n\n");
-    const moduleFiles = bundleScripts.map((m) => m.code).join("\n\n");
+    const moduleFiles = selected.map((m) => m.code).join("\n\n");
+    const bootstrap = safeRead(bootstrapPath);
 
-    const bootstrap = (() => {
-        const defs = selected
-            .map((script) => (script.factory ? `${script.factory}(StorageUtils)` : ""))
-            .filter(Boolean)
-            .map((line) => `        ${line}`)
-            .join(",\n");
-
-        return `function initializeToolkit() {
-    console.log("[Toolkit] Initializing…");
-
-    const registry = new ToolkitModuleRegistry(StorageUtils);
-    const panel    = new ToolkitPanel(StorageUtils);
-
-    const moduleManager = createModuleManagerModule(StorageUtils);
-    registry.register(moduleManager);
-
-    const enabledMap = moduleManager.loadEnabledMap();
-    const allDefinitions = [
-${defs}
-    ];
-
-    moduleManager.setModuleDefinitions(allDefinitions);
-
-    const activeModules = [];
-    allDefinitions.forEach(def => {
-        const enabled = enabledMap[def.name] !== false;
-        if (enabled) {
-            activeModules.push(registry.register(def));
-        }
-    });
-
-    panel.attachModule(moduleManager);
-    activeModules.forEach(m => panel.attachModule(m));
-    panel.showModule(moduleManager.name);
-    window.__ToolkitPanel = panel;
-
-    console.log("[Toolkit] READY ✅");
-}
-
-if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initializeToolkit);
-} else {
-    initializeToolkit();
-}`;
-    })();
+    const definitions = selected
+        .filter((script) => script.factory)
+        .map((script) => `    { name: ${JSON.stringify(script.name)}, title: ${JSON.stringify(script.title)}, factory: ${script.factory} }`)
+        .join(",\n");
 
     const header = "(function(){'use strict';\n";
     const footer = "\n})();";
 
-    return [header, coreFiles, moduleFiles, bootstrap, footer].join("\n\n");
+    const payload = [
+        header,
+        coreFiles,
+        moduleFiles,
+        bootstrap,
+        "window.__KISS_MODULE_DEFINITIONS__ = [\n" + definitions + "\n].filter(def => typeof def.factory === 'function');",
+        "window.__kissBootstrapToolkit = window.__kissBootstrapToolkit || bootstrapToolkit;",
+        "window.__kissPrepareBridge = window.__kissPrepareBridge || prepareToolkitBridge;",
+        "window.__KISS_BUNDLE_READY__ = true;",
+        footer,
+    ]
+        .filter(Boolean)
+        .join("\n\n");
+
+    return payload;
 }
 
 module.exports = { loadScripts, buildBundle };

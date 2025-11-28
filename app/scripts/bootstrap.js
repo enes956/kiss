@@ -1,57 +1,94 @@
 // bootstrap.js
-function initializeToolkit() {
-    console.log("[Toolkit] Initializing…");
-
-    const registry = new ToolkitModuleRegistry(StorageUtils);
-    const panel    = new ToolkitPanel(StorageUtils);
-
-    // 1) ModuleManager önce oluşturulur
-    const moduleManager = createModuleManagerModule(StorageUtils);
-    registry.register(moduleManager);
-
-    // 2) Enabled bilgisi çekilir
-    const enabledMap = moduleManager.loadEnabledMap();
-
-    // 3) Tüm modüller tek listede
-    // AutoKick + AutoSave çıkarıldı → AutoCombo kullanıyoruz
-    const allDefinitions = [
-        createAutoSpinModule(StorageUtils),
-        createAutoComboModule(StorageUtils),
-        createVisualCleanerModule(StorageUtils),
-        createMessageCleanerModule()
-    ];
-
-    // ✅ 4) DEFINITIONS aktar (liste gösterimi için şart!)
-    moduleManager.setModuleDefinitions(allDefinitions);
-
-    // 5) Enabled olanları register et
-    const activeModules = [];
-    allDefinitions.forEach(def => {
-        const enabled = enabledMap[def.name] !== false;
-        if (enabled) {
-            activeModules.push(registry.register(def));
-        }
-    });
-
-    // 6) Panel attach — moduleManager hep ilk
-    panel.attachModule(moduleManager);
-    activeModules.forEach(m => panel.attachModule(m));
-
-    // İlk açılışta moduleManager’ı göster
-    panel.showModule(moduleManager.name);
-
-    // Global erişim
-    window.__ToolkitPanel = panel;
-
-    console.log("[Toolkit] READY ✅");
+function prepareToolkitBridge(slotInfo = {}) {
+    window.__KISSToolkit__ = window.__KISSToolkit__ || { slots: {} };
+    window.__KISSToolkit__.slots[slotInfo.slot] = { createdAt: Date.now(), info: slotInfo };
+    return window.__KISSToolkit__;
 }
 
+function createToolkitRuntime(definitions = [], options = {}) {
+    const tickInterval = Math.max(250, Number(options.tickInterval) || 1000);
+    const registry = new ToolkitModuleRegistry(StorageUtils);
+    const panel = new ToolkitPanel(StorageUtils);
 
-// --------------------------------------------------------
-// ENTRY — DOMContentLoaded sonrası toolkit başlat
-// --------------------------------------------------------
-if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initializeToolkit);
-} else {
-    initializeToolkit();
+    registry.setActiveDefinitions(definitions);
+
+    const modules = definitions
+        .map((definition) => {
+            try {
+                const instance = definition.factory?.(StorageUtils);
+                if (!instance) return null;
+
+                const moduleConfig = {
+                    ...instance,
+                    name: instance.name || definition.name,
+                    title: instance.title || definition.title || definition.name,
+                    defaultSettings: instance.defaultSettings || {},
+                    renderSettings: instance.renderSettings,
+                };
+
+                const registered = registry.register(moduleConfig);
+                panel.attachModule(registered);
+
+                return {
+                    definition,
+                    instance,
+                };
+            } catch (error) {
+                console.error("Modül başlatılamadı:", definition?.name, error);
+                return null;
+            }
+        })
+        .filter(Boolean);
+
+    let tickTimer = null;
+
+    const callLifecycle = (hook) => {
+        modules.forEach((mod) => {
+            try {
+                if (typeof mod.instance?.[hook] === "function") {
+                    mod.instance[hook]({ slot: options.slot, utils: StorageUtils });
+                }
+            } catch (error) {
+                console.error(`Lifecycle ${hook} çalıştırılamadı:`, mod.definition?.name, error);
+            }
+        });
+    };
+
+    const runtime = {
+        slot: options.slot,
+        modules: modules.map((m) => m.definition?.name).filter(Boolean),
+        start() {
+            panel.showFirstModule();
+            callLifecycle("onLoad");
+            callLifecycle("onStart");
+
+            const hasTickers = modules.some((mod) => typeof mod.instance?.onTick === "function");
+            if (hasTickers) {
+                tickTimer = setInterval(() => callLifecycle("onTick"), tickInterval);
+            }
+        },
+        destroy() {
+            if (tickTimer) clearInterval(tickTimer);
+            callLifecycle("onDestroy");
+            panel.destroy();
+        },
+    };
+
+    return runtime;
+}
+
+function bootstrapToolkit(definitions = [], options = {}) {
+    const bridge = prepareToolkitBridge(options);
+    const runtime = createToolkitRuntime(definitions, options);
+    runtime.start();
+
+    if (bridge && options.slot !== undefined) {
+        bridge.slots[options.slot] = {
+            ...bridge.slots[options.slot],
+            runtime,
+        };
+    }
+
+    window.__ToolkitRuntime = runtime;
+    return runtime;
 }

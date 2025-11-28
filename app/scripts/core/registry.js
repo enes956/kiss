@@ -3,6 +3,11 @@ class ToolkitModuleRegistry {
     constructor(utils) {
         this.utils = utils;
         this.modules = new Map();
+        this.activeDefinitions = [];
+    }
+
+    setActiveDefinitions(list = []) {
+        this.activeDefinitions = Array.isArray(list) ? list : [];
     }
 
     register(config) {
@@ -18,5 +23,9 @@ class ToolkitModuleRegistry {
 
     allModules() {
         return Array.from(this.modules.values());
+    }
+
+    activeDefinitionsList() {
+        return this.activeDefinitions;
     }
 }
