@@ -8,7 +8,7 @@ export default function buildContentTemplate() {
                     <div>
                         <p class="eyebrow">Ayar Ekranı</p>
                         <h1>Çoklu Görünüm ve Script Kontrolü</h1>
-                        <p class="description">View sayısını, slot ayrıntılarını ve script paketini belirleyin. Start sonrası yalnızca çalışma alanı açılır.</p>
+                        <p class="description">Slot sayısını ve script paketini belirleyin. Start sonrası yalnızca çalışma alanı açılır.</p>
                         <span class="header-underline"></span>
                     </div>
                     <div class="header-pill">Sadece ayarlar</div>
@@ -19,26 +19,19 @@ export default function buildContentTemplate() {
                         <div class="content-card">
                             <div class="card-head">
                                 <div>
-                                    <p class="label">Görünüm planı</p>
-                                    <p class="hint">Slot sayısını belirleyin, her slot için profil ve not atayın.</p>
+                                    <p class="label">View / slot sayısı</p>
+                                    <p class="hint">1-4 arası slot seçin. Seçim yatay slot picker ile yapılır.</p>
                                 </div>
-                                <span id="viewCountLabel" class="chip">4 görünüm</span>
+                                <span id="viewCountLabel" class="chip">4 slot</span>
                             </div>
 
                             <div class="field">
-                                <p class="label">View sayısı</p>
-                                <input type="range" min="1" max="4" value="4" id="viewCount" />
-                                <div id="viewPreview" class="count-preview" aria-hidden="true"></div>
-                            </div>
-
-                            <div class="divider"></div>
-
-                            <div class="field">
-                                <div class="field-head">
-                                    <p class="label">Her view için seçenekler</p>
-                                    <p class="hint">Profil, çalışma modu ve kısa notları düzenleyin.</p>
+                                <div id="slotPicker" class="slot-picker" role="group" aria-label="Slot sayısı seçimi">
+                                    <button type="button" class="slot-btn" data-count="1">1</button>
+                                    <button type="button" class="slot-btn" data-count="2">2</button>
+                                    <button type="button" class="slot-btn" data-count="3">3</button>
+                                    <button type="button" class="slot-btn" data-count="4">4</button>
                                 </div>
-                                <div id="viewOptions" class="view-options"></div>
                             </div>
                         </div>
 
@@ -46,7 +39,7 @@ export default function buildContentTemplate() {
                             <div class="card-head">
                                 <div>
                                     <p class="label">Script / modül seçimi</p>
-                                    <p class="hint">app/scripts/modules içindeki modülleri inceleyin. Seçilen modüllerle yeni bir paket üretilir ve tüm view’lere enjekte edilir.</p>
+                                    <p class="hint">app/scripts/modules içindeki modüller otomatik listelenir. Seçilenler paketlenir ve her slota enjekte edilir.</p>
                                 </div>
                             </div>
                             <div id="scriptList" class="script-list"></div>

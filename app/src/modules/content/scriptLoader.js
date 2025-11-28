@@ -29,9 +29,11 @@ function readList(dirPath) {
 
 function extractMeta(code, fallbackName) {
     const titleMatch = code.match(/title:\s*["']([^"']+)/i);
+    const descriptionMatch = code.match(/description:\s*["']([^"']+)/i);
     const factoryMatch = code.match(/function\s+(create[\w]+Module)/);
     return {
         title: titleMatch?.[1] || fallbackName,
+        description: descriptionMatch?.[1] || null,
         factory: factoryMatch?.[1] || null,
     };
 }
@@ -43,11 +45,15 @@ function loadScripts() {
         try {
             const code = safeRead(filePath);
             const meta = extractMeta(code, path.basename(filePath));
+            const displayName = path.basename(filePath, ".js");
             scripts.push({
                 name: path.basename(filePath),
                 code,
                 title: meta.title,
+                description: meta.description,
+                displayName,
                 factory: meta.factory,
+                hidden: path.basename(filePath) === "ModuleManager.js",
             });
         } catch (err) {
             console.error("Script okunamadı:", filePath, err);
@@ -59,7 +65,10 @@ function loadScripts() {
 
 function buildBundle(selectedNames = []) {
     const allScripts = loadScripts();
-    const selected = allScripts.filter((s) => selectedNames.includes(s.name));
+    const selection = new Set(selectedNames);
+    const manager = allScripts.find((s) => s.name === "ModuleManager.js");
+    if (manager) selection.add(manager.name);
+    const selected = allScripts.filter((s) => selection.has(s.name));
 
     const coreFiles = readList(coreDir).map((p) => safeRead(p)).join("\n\n");
     const moduleFiles = selected.map((m) => m.code).join("\n\n");
