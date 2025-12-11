@@ -48,6 +48,15 @@ class ToolkitPanel {
         if (!first.done) this.showModule(first.value);
     }
 
+    destroy() {
+        try {
+            this.panel?.remove();
+        } catch (err) {
+            console.error("Panel kaldırılamadı", err);
+        }
+        this.tabMap.clear();
+    }
+
     #buildLayout() {
         const panel = this.utils.el('div', {
             css: {

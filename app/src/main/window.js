@@ -8,6 +8,7 @@ function createMainWindow() {
         frame: false,
         backgroundColor: "#060c16",
         show: false,
+        alwaysOnTop: true,
         webPreferences: {
             preload: path.join(__dirname, "../preload/preload.js"),
             contextIsolation: true,
@@ -26,6 +27,8 @@ function createMainWindow() {
 
     mainWin.once("ready-to-show", () => {
         if (!mainWin.isDestroyed()) {
+            mainWin.setAlwaysOnTop(true, "screen-saver");
+            mainWin.setVisibleOnAllWorkspaces(true);
             mainWin.show();
         }
     });

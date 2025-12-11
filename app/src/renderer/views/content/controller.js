@@ -7,6 +7,7 @@ let resizeBound = false;
 let fullscreenSlot = null;
 let runtimeMode = false;
 let compiledBundle = "";
+const slotRuntimeHandles = new Map();
 
 function qs(id) {
     return document.getElementById(id);
@@ -41,68 +42,14 @@ function setLayoutMode(mode = "setup") {
 function updateRuntimeSummary(count, scripts) {
     const summary = qs("runtimeSummary");
     if (!summary) return;
-    const names = (scripts || []).map((s) => s.title || s.name);
-    const modulesText = names.length ? names.join(", ") : "script seçilmedi";
-    summary.textContent = `${count} görünüm · ${modulesText}`;
+    const names = (scripts || []).map((s) => s.displayName || s.title || s.name?.replace(/\.js$/i, "") || "Modül");
+    const modulesText = names.length ? names.join(", ") : "ModuleManager";
+    summary.textContent = `${count} slot · ${modulesText}`;
 }
 
 function updateCountUI(count) {
     const label = qs("viewCountLabel");
-    if (label) label.textContent = `${count} görünüm`;
-
-    const preview = qs("viewPreview");
-    if (!preview) return;
-
-    preview.innerHTML = "";
-    const fragment = document.createDocumentFragment();
-    for (let i = 0; i < count; i += 1) {
-        const dot = document.createElement("span");
-        dot.className = "preview-dot";
-        fragment.appendChild(dot);
-    }
-    preview.appendChild(fragment);
-}
-
-function buildViewOptionCard(index) {
-    const card = document.createElement("div");
-    card.className = "view-option-card";
-    card.dataset.slot = String(index + 1);
-    card.innerHTML = `
-        <div class="card-head">
-            <span class="pill">View ${index + 1}</span>
-            <input type="text" class="input note" name="note-${index + 1}" placeholder="Kısa not (isteğe bağlı)" />
-        </div>
-        <div class="card-grid">
-            <label class="card-field">
-                <span>Profil</span>
-                <select name="profile-${index + 1}" class="input select">
-                    <option value="standart">Standart</option>
-                    <option value="deneme">Deneme</option>
-                    <option value="hızlı">Hızlı</option>
-                </select>
-            </label>
-            <label class="card-field">
-                <span>Çalışma modu</span>
-                <select name="mode-${index + 1}" class="input select">
-                    <option value="tam">Tam mod</option>
-                    <option value="mini">Mini mod</option>
-                    <option value="gözlem">Gözlem</option>
-                </select>
-            </label>
-        </div>
-    `;
-    return card;
-}
-
-function renderViewOptions(count) {
-    const holder = qs("viewOptions");
-    if (!holder) return;
-    holder.innerHTML = "";
-    const fragment = document.createDocumentFragment();
-    for (let i = 0; i < count; i += 1) {
-        fragment.appendChild(buildViewOptionCard(i));
-    }
-    holder.appendChild(fragment);
+    if (label) label.textContent = `${count} slot`;
 }
 
 function renderScripts(list) {
@@ -110,21 +57,24 @@ function renderScripts(list) {
     if (!container) return;
     container.innerHTML = "";
 
-    if (!list || !list.length) {
+    const visibleList = (list || []).filter((script) => !script.hidden && script.name !== "ModuleManager.js");
+
+    if (!visibleList.length) {
         container.innerHTML = `<p class="hint">Script bulunamadı. app/scripts/modules klasörünü kontrol edin.</p>`;
         return;
     }
 
     const fragment = document.createDocumentFragment();
-    list.forEach((script, idx) => {
+    visibleList.forEach((script, idx) => {
         const row = document.createElement("label");
         row.className = "script-row";
-        const isManager = script.name === "ModuleManager.js";
+        const displayName = script.displayName || script.name.replace(/\.js$/i, "");
+        const description = script.description || `${displayName} modülü – paket içine eklenir.`;
         row.innerHTML = `
-            <input type="checkbox" class="script-toggle" name="script-${idx}" value="${script.name}" ${isManager ? "checked disabled" : "checked"} />
+            <input type="checkbox" class="script-toggle" name="script-${idx}" value="${script.name}" checked />
             <div class="script-meta">
-                <p class="script-name">${script.title || script.name}</p>
-                <p class="script-desc">${script.name} · ${isManager ? "Merkez panel için zorunlu" : "Seçildiğinde paket içine eklenir."}</p>
+                <p class="script-name">${script.title || displayName}</p>
+                <p class="script-desc">${description}</p>
             </div>
         `;
         fragment.appendChild(row);
@@ -136,27 +86,14 @@ function renderScripts(list) {
 function getSelectedScripts() {
     const toggles = Array.from(document.querySelectorAll(".script-toggle"));
     const selectedNames = toggles.filter((el) => el.checked).map((el) => el.value);
-    return cachedScripts.filter((s) => selectedNames.includes(s.name));
+    const selected = cachedScripts.filter((s) => selectedNames.includes(s.name));
+    const manager = cachedScripts.find((s) => s.name === "ModuleManager.js");
+    if (manager && !selected.some((s) => s.name === manager.name)) selected.unshift(manager);
+    return selected;
 }
 
 function getSelectedScriptNames() {
     return getSelectedScripts().map((s) => s.name);
-}
-
-function collectViewOptions(count) {
-    const options = [];
-    for (let i = 1; i <= count; i += 1) {
-        const note = document.querySelector(`[name="note-${i}"]`);
-        const profile = document.querySelector(`[name="profile-${i}"]`);
-        const mode = document.querySelector(`[name="mode-${i}"]`);
-        options.push({
-            slot: i,
-            note: note?.value || "",
-            profile: profile?.value || "standart",
-            mode: mode?.value || "tam",
-        });
-    }
-    return options;
 }
 
 function setGridLayout(count) {
@@ -167,6 +104,20 @@ function setGridLayout(count) {
     else if (count === 2) grid.style.gridTemplateColumns = "repeat(2, 1fr)";
     else if (count === 3) grid.style.gridTemplateColumns = "repeat(3, 1fr)";
     else grid.style.gridTemplateColumns = "repeat(2, 1fr)";
+}
+
+function markSlotButtons(count) {
+    document.querySelectorAll(".slot-btn").forEach((btn) => {
+        btn.classList.toggle("active", Number(btn.dataset.count) === count);
+    });
+}
+
+function setSlotCount(count) {
+    const normalized = Math.min(4, Math.max(1, Number(count) || 1));
+    currentCount = normalized;
+    updateCountUI(normalized);
+    setGridLayout(normalized);
+    markSlotButtons(normalized);
 }
 
 function setActiveSlot(slotId) {
@@ -235,17 +186,11 @@ function toggleFullscreen(slotWrapper) {
     setStatus(`View ${slotWrapper.dataset.slot} tam ekranda.`, "success");
 }
 
-function toggleMinimize(slotWrapper) {
-    if (!slotWrapper) return;
-    const minimized = slotWrapper.classList.toggle("minimized");
-    const message = minimized ? "küçültüldü" : "kendi alanında açıldı";
-    setStatus(`View ${slotWrapper.dataset.slot} ${message}.`, "info");
-    if (!minimized) fitWebview(slotWrapper.querySelector("webview"));
-}
-
 function closeSlot(slotWrapper) {
     if (!slotWrapper) return;
     const slotId = slotWrapper.dataset.slot;
+    const view = slotWrapper.querySelector("webview");
+    destroySlotRuntime(Number(slotId), view);
     if (fullscreenSlot === slotId) exitFullscreen();
     if (activeSlot === slotId) activeSlot = null;
     slotWrapper.remove();
@@ -263,11 +208,15 @@ function handleSlotAction(slotWrapper, webview, action) {
         case "fullscreen":
             toggleFullscreen(slotWrapper);
             break;
-        case "minimize":
-            toggleMinimize(slotWrapper);
-            break;
         case "reload":
             try { webview?.reload(); setStatus(`View ${slotWrapper.dataset.slot} yenilendi.`, "info"); } catch {}
+            break;
+        case "pin":
+            slotWrapper.classList.toggle("pinned");
+            setStatus(
+                `View ${slotWrapper.dataset.slot} ${slotWrapper.classList.contains("pinned") ? "üstte tutuluyor" : "normal görünüme alındı"}.`,
+                "info",
+            );
             break;
         case "close":
             closeSlot(slotWrapper);
@@ -277,14 +226,59 @@ function handleSlotAction(slotWrapper, webview, action) {
     }
 }
 
+async function injectSlotRuntime(webview, slot) {
+    if (!compiledBundle) return;
+    try {
+        await webview.executeJavaScript(compiledBundle);
+        await webview.executeJavaScript(`
+            (function(){
+                try {
+                    window.__kissPrepareBridge?.({ slot: ${slot}, startedAt: Date.now() });
+                    const runtime = window.__kissBootstrapToolkit?.(window.__KISS_MODULE_DEFINITIONS__ || [], { slot: ${slot}, tickInterval: 1000 });
+                    if (runtime) {
+                        window.__KISS_SLOT_RUNTIMES__ = window.__KISS_SLOT_RUNTIMES__ || {};
+                        window.__KISS_SLOT_RUNTIMES__[${slot}] = runtime;
+                    }
+                } catch (err) {
+                    console.error('Slot runtime başlatılamadı', err);
+                }
+            })();
+        `);
+        slotRuntimeHandles.set(slot, webview);
+    } catch (err) {
+        console.error("Slot scriptleri enjekte edilemedi", err);
+        setStatus("Scriptler enjekte edilemedi. Ayarları kontrol edin.", "danger");
+    }
+}
+
+async function destroySlotRuntime(slot, webview) {
+    try {
+        await webview?.executeJavaScript(`
+            try {
+                const ctx = window.__KISS_SLOT_RUNTIMES__?.[${slot}];
+                ctx?.destroy?.();
+                if (window.__KISS_SLOT_RUNTIMES__) delete window.__KISS_SLOT_RUNTIMES__[${slot}];
+            } catch (err) { console.error(err); }
+        `);
+    } catch {}
+    slotRuntimeHandles.delete(slot);
+}
+
+function destroyAllSlotRuntimes() {
+    slotRuntimeHandles.forEach((webview, slot) => {
+        destroySlotRuntime(slot, webview);
+    });
+    slotRuntimeHandles.clear();
+}
+
 function attachSlotControls(slotWrapper, webview) {
     const controls = document.createElement("div");
     controls.className = "slot-controls";
     controls.innerHTML = `
         <button type="button" data-action="focus">Öne al</button>
         <button type="button" data-action="fullscreen">Tam ekran</button>
-        <button type="button" data-action="minimize">Küçült</button>
         <button type="button" data-action="reload">Yenile</button>
+        <button type="button" data-action="pin">Üstte tut</button>
         <button type="button" data-action="close" class="danger">Kapat</button>
     `;
 
@@ -298,7 +292,7 @@ function attachSlotControls(slotWrapper, webview) {
     slotWrapper.appendChild(controls);
 }
 
-function mountWebview(slot, bundle, options) {
+function mountWebview(slot) {
     const grid = qs("contentGrid");
     if (!grid) return;
 
@@ -309,11 +303,7 @@ function mountWebview(slot, bundle, options) {
 
     const info = document.createElement("div");
     info.className = "slot-info";
-    info.innerHTML = `<strong>View ${slot}</strong><span>${options?.profile || "standart"}</span>`;
-
-    const note = document.createElement("div");
-    note.className = "slot-note";
-    if (options?.note) note.textContent = options.note;
+    info.innerHTML = `<strong>View ${slot}</strong><span>Slot ${slot}</span>`;
 
     const webview = document.createElement("webview");
     webview.setAttribute("src", "https://getkisskiss.com");
@@ -322,13 +312,7 @@ function mountWebview(slot, bundle, options) {
 
     webview.addEventListener("dom-ready", () => {
         webview.insertCSS("::-webkit-scrollbar{display:none!important;} html,body{margin:0;padding:0;overflow:hidden;}");
-        if (bundle) {
-            try {
-                webview.executeJavaScript(bundle).catch(() => {});
-            } catch (err) {
-                console.error("Script paketi enjekte edilemedi", err);
-            }
-        }
+        injectSlotRuntime(webview, slot);
         fitWebview(webview);
     });
 
@@ -337,7 +321,6 @@ function mountWebview(slot, bundle, options) {
 
     attachSlotControls(slotWrapper, webview);
     slotWrapper.appendChild(info);
-    if (options?.note) slotWrapper.appendChild(note);
     slotWrapper.appendChild(webview);
     grid.appendChild(slotWrapper);
 }
@@ -345,6 +328,7 @@ function mountWebview(slot, bundle, options) {
 function resetGrid() {
     const grid = qs("contentGrid");
     if (!grid) return;
+    destroyAllSlotRuntimes();
     grid.innerHTML = "";
     grid.dataset.count = "0";
     exitFullscreen();
@@ -352,7 +336,7 @@ function resetGrid() {
     const summary = qs("runtimeSummary");
     if (summary) summary.textContent = "—";
     compiledBundle = "";
-    setStatus("Hazır. Start ile görünüm setini başlatın.", "info");
+    setStatus("Start için hazır. Slot ve modül seçimini yapın.", "info");
 }
 
 function stopRuntime() {
@@ -391,37 +375,28 @@ async function clearHistory() {
 
 function bindActions() {
     const form = qs("contentForm");
-    const viewCountInput = qs("viewCount");
     const resetBtn = qs("resetGrid");
     const refreshAllBtn = qs("refreshAll");
     const refreshFocusedBtn = qs("refreshFocused");
     const clearHistoryBtn = qs("clearHistory");
     const backToSetupBtn = qs("backToSetup");
 
-    viewCountInput?.addEventListener("input", (e) => {
-        const val = Number(e.target.value) || 1;
-        currentCount = val;
-        updateCountUI(val);
-        renderViewOptions(val);
-        setGridLayout(val);
+    const slotPicker = qs("slotPicker");
+    slotPicker?.addEventListener("click", (evt) => {
+        const btn = evt.target?.closest("button[data-count]");
+        if (!btn) return;
+        setSlotCount(Number(btn.dataset.count));
     });
 
     form?.addEventListener("submit", async (evt) => {
         evt.preventDefault();
-        const count = Number(qs("viewCount")?.value) || 1;
+        const count = currentCount;
         const selectedScripts = getSelectedScripts();
         const runtimeScripts = selectedScripts.filter((s) => s.name !== "ModuleManager.js");
         const selectedNames = selectedScripts.map((s) => s.name);
-        const options = collectViewOptions(count);
 
         resetGrid();
         setGridLayout(count);
-
-        if (!runtimeScripts.length) {
-            setStatus("Yönetici dışında en az bir script seçin.", "danger");
-            setLayoutMode("setup");
-            return;
-        }
 
         setStatus("Script paketi oluşturuluyor…", "info");
         compiledBundle = await buildBundleForSelection(selectedNames);
@@ -433,11 +408,13 @@ function bindActions() {
         }
 
         setLayoutMode("runtime");
-        options.slice(0, count).forEach((opt) => mountWebview(opt.slot, compiledBundle, opt));
+        for (let slot = 1; slot <= count; slot += 1) {
+            mountWebview(slot);
+        }
         currentCount = count;
         updateRuntimeSummary(count, runtimeScripts);
         fitAllWebviews();
-        setStatus(`Start tamamlandı. ${count} view açıldı ve seçilen scriptler derlenip enjekte edildi.`, "success");
+        setStatus(`Start tamamlandı. ${count} slot açıldı ve seçilen scriptler derlenip enjekte edildi.`, "success");
     });
 
     resetBtn?.addEventListener("click", resetGrid);
@@ -459,9 +436,7 @@ async function initScripts() {
 
 export default function contentController() {
     setLayoutMode("setup");
-    updateCountUI(currentCount);
-    renderViewOptions(currentCount);
-    setGridLayout(currentCount);
+    setSlotCount(currentCount);
     initScripts();
     bindActions();
 
